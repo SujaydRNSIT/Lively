@@ -15,7 +15,7 @@
 
 ---
 
-**A real-time voice AI sales agent that listens to every word, adapts its strategy on the fly, remembers full deal context across turns, and acts — booking demos, dispatching calendar invites, updating CRMs, and escalating to humans — all while the buyer is still on the line.**
+**A real-time voice AI sales agent that listens to every word, adapts its strategy on the fly, remembers full deal context across turns, and acts booking demos, dispatching calendar invites, updating CRMs, and escalating to humans all while the buyer is still on the line.**
 
 *Powered by the Agora Conversational AI Engine with a custom multi-LLM brain (Groq LPU + NVIDIA NIM).*
 
