@@ -10,14 +10,16 @@
 [![Agora](https://img.shields.io/badge/Agora-Conversational%20AI-099DFD?style=for-the-badge&logo=agora&logoColor=white)](https://www.agora.io)
 [![Groq](https://img.shields.io/badge/Groq-LPU%20Inference-F55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com)
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA-NIM-76B900?style=for-the-badge&logo=nvidia&logoColor=white)](https://build.nvidia.com)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployed-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com)
+[![Render](https://img.shields.io/badge/Render-Backend-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://render.com)
 
 ---
 
-**A real-time voice AI sales agent that listens to every word, adapts its strategy on the fly, remembers full deal context across turns, and acts — booking demos, updating CRMs, and escalating to humans — all while the buyer is still on the line.**
+**A real-time voice AI sales agent that listens to every word, adapts its strategy on the fly, remembers full deal context across turns, and acts — booking demos, dispatching calendar invites, updating CRMs, and escalating to humans — all while the buyer is still on the line.**
 
 *Powered by the Agora Conversational AI Engine with a custom multi-LLM brain (Groq LPU + NVIDIA NIM).*
 
-[Features](#core-features) · [Architecture](#system-architecture) · [Quick Start](#quick-start) · [Manual Setup](#manual-setup-alternative) · [Demo](#demo-walkthrough) · [Project Structure](#project-structure)
+[Features](#core-features) · [Architecture](#system-architecture) · [Quick Start](#quick-start) · [Production Deployment](#production-deployment) · [Demo](#demo-walkthrough) · [Environment Variables](#environment-variables-reference)
 
 ---
 
@@ -32,11 +34,12 @@
 | **Real-Time Voice Conversations** | Sub-300ms round-trip latency with Agora's telecom-grade RTC — natural turn-taking, barge-in, echo cancellation, and noise suppression out of the box. |
 | **Adaptive Sales Brain** | Every utterance is analyzed for buyer intent, scale, budget, timeline, competitor mentions, and authority level. The agent adapts its pitch in real time. |
 | **Persistent Deal Memory** | Additive & mergeable deal state across all turns — nothing is forgotten. Budget changes? User scale updates? Lively merges them with a full change-log. |
+| **Autonomous Booking & Email Dispatch** | Proactively locks in calendar reservations, generates Google Meet links, and dispatches full `.ics` calendar invites directly to the user's inbox via SMTP. |
 | **RAG-Grounded Responses** | Battlecards, pricing sheets, and competitive intelligence are retrieved in real time so every claim is grounded in facts, not hallucinations. |
-| **Live Tool Calling** | `book_meeting()`, `create_or_update_crm_lead()`, `escalate_to_human()` — the agent takes action while the conversation is still happening. |
+| **Live Tool Calling** | `book_meeting()`, `create_or_update_crm_lead()`, `escalate_to_human()` — the agent takes real-world action while the conversation is unfolding. |
 | **Multi-LLM Router** | Groq LPU for ultra-low-latency voice turns, NVIDIA NIM for complex reasoning, and a built-in sales specialist brain as a zero-downtime fallback. |
-| **Dark / Light Theme** | Full dark mode with a one-click Sun/Moon toggle in the cockpit navbar. |
-| **Live Telemetry** | Real-time TTFT, response latency, model distribution, memory diffs, and deal stage tracking — all streamed via WebSocket. |
+| **Resilient Live Telemetry** | Real-time TTFT, response latency, model distribution, memory diffs, and live transcription streamed via WebSocket with automatic reconnect and polling fallbacks. |
+| **Dark / Light Theme** | Editorial luxury design system with full dark mode and one-click Sun/Moon toggle. |
 
 <br/>
 
@@ -77,7 +80,7 @@
 │  │  1. LISTEN    → Extract intent, budget, competitors      │  │
 │  │  2. ADAPT     → RAG retrieval + next-best-action         │  │
 │  │  3. REMEMBER  → Additive deal state merge + change-log   │  │
-│  │  4. ACT       → Tool-calling (book, CRM, escalate)       │  │
+│  │  4. ACT       → Tool-calling & autonomous email dispatch │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
 │  ┌────────────────┐  ┌──────────────┐  ┌───────────────────┐   │
@@ -86,12 +89,17 @@
 │  │  Groq LPU      │  │ book_meeting │  │ TTFT / p50 / p95  │   │
 │  │  (sub-200ms)   │  │ update_crm   │  │ Model distrib.    │   │
 │  │                │  │ escalate     │  │ Memory diffs      │   │
-│  │  NVIDIA NIM    │  │              │  │ Stage tracking    │   │
+│  │  NVIDIA NIM    │  │ send_invite  │  │ Stage tracking    │   │
 │  │  (reasoning)   │  └──────────────┘  └───────────────────┘   │
 │  │                │                                            │
 │  │  Built-in      │                                            │
 │  │  (fallback)    │                                            │
 │  └────────────────┘                                            │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                   Email & Calendar                       │  │
+│  │  SMTP Dispatcher · ICS Calendar Generator · Google Meet  │  │
+│  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │                   Storage Layer                          │  │
@@ -105,9 +113,7 @@
 
 ---
 
-## Quick Start
-
-> **This is the recommended way to run Lively.** Two `.bat` files handle everything — dependencies, tunneling, port management, and launching all services in one terminal.
+## Quick Start (Local Development)
 
 ### Prerequisites
 
@@ -119,166 +125,96 @@
 
 ### Step 1 — Clone the Repository
 
-```cmd
-git clone https://github.com/your-org/Lively.git
-cd Lively
+```bash
+git clone https://github.com/anishsmit23/lively.git
+cd lively
 ```
 
 ### Step 2 — Install Everything
 
-Double-click **`install.bat`** or run it from a terminal:
+Double-click **`install.bat`** or run from your terminal:
 
 ```cmd
 install.bat
 ```
 
-This single script automatically:
-
-| # | What it does |
-|:---|:---|
-| 1 | Detects your Python installation and creates a `.venv` virtual environment |
-| 2 | Installs all backend Python packages from `backend/requirements.txt` |
-| 3 | Installs all frontend npm packages via `npm ci` |
-| 4 | Creates `.env` from `.env.example` if it doesn't exist |
-| 5 | Downloads `cloudflared.exe` for the Agora webhook tunnel |
+This automated script:
+1. Detects Python and creates a `.venv` virtual environment.
+2. Installs backend dependencies from `backend/requirements.txt`.
+3. Installs frontend npm packages.
+4. Generates `.env` from `.env.example` if missing.
+5. Downloads `cloudflared.exe` for the local Agora webhook tunnel.
 
 ### Step 3 — Configure API Keys
 
-Open `.env` in any editor and fill in your credentials:
+Open `.env` and fill in your keys:
 
 ```env
-# ── Required ─────────────────────────────────────
+# ── Agora Conversational AI ──────────────────────
 AGORA_APP_ID=your_agora_app_id
 AGORA_APP_CERTIFICATE=your_agora_app_certificate
 AGORA_REST_KEY=your_agora_rest_key
 AGORA_REST_SECRET=your_agora_rest_secret
 
-# ── At least one LLM provider ────────────────────
+# ── LLM Providers ────────────────────────────────
 GROQ_API_KEY=gsk_...                      # Primary — low-latency voice turns
 NVIDIA_NIM_API_KEY=nvapi-...              # Secondary — complex reasoning
 
-# ── Optional ─────────────────────────────────────
-PINECONE_API_KEY=                          # Leave blank for built-in in-memory RAG
+# ── SMTP / Real Email & Calendar Invites ────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=yourname@gmail.com
+SMTP_PASSWORD=your_16_char_google_app_password
+SMTP_FROM="Lively AI <yourname@gmail.com>"
+SMTP_FROM_EMAIL=yourname@gmail.com
+SMTP_USE_TLS=true
 ```
 
 ### Step 4 — Launch Lively
 
-Double-click **`run.bat`** or run from a terminal:
+Double-click **`run.bat`** or run:
 
 ```cmd
 run.bat
 ```
 
-**`run.bat` handles everything for you:**
+`run.bat` automatically:
+- Clears any stale processes on ports 8000 & 5173.
+- Launches the Cloudflare tunnel for Agora webhooks.
+- Auto-updates `BACKEND_PUBLIC_URL` in `.env`.
+- Boots the FastAPI backend on port 8000.
+- Boots Vite on port 5173 and opens `http://localhost:5173` in your browser.
 
-```
- ✓  Frees any stale ports (8000, 5173)
- ✓  Starts the Cloudflare tunnel for Agora webhooks
- ✓  Auto-updates BACKEND_PUBLIC_URL in your .env
- ✓  Launches the FastAPI backend on port 8000
- ✓  Launches the Vite dev server on port 5173
- ✓  Opens http://localhost:5173 in your browser
-```
-
-> **Want separate terminal windows?** Run `run_separate.bat` instead — it opens the tunnel, backend, and frontend in three distinct CMD windows for easier debugging.
+*(For separate terminal windows per service, run `run_separate.bat` instead.)*
 
 <br/>
 
 ---
 
-## Manual Setup (Alternative)
+## Production Deployment
 
-> Use this approach if you're on **macOS / Linux**, prefer full control, or need to debug individual services.
+Lively is configured for zero-friction cloud deployment:
 
-### Prerequisites
+### 1. Frontend (Vercel)
+The repository includes a ready-to-use [`vercel.json`](vercel.json):
+- **Framework**: Vite
+- **Root Directory**: `.`
+- **Build Command**: `cd frontend && npm run build`
+- **Output Directory**: `frontend/dist`
+- **Rewrites**: Automatically routes `/api/*` and `/v1/*` to your Render backend.
+- Connect your GitHub repository (`anishsmit23/lively`) in the [Vercel Dashboard](https://vercel.com).
 
-- Python 3.11+
-- Node.js 18+ / npm
-- A Cloudflare tunnel (or ngrok) for Agora webhook callbacks
-
-### 1. Clone & Configure Environment
-
-```bash
-git clone https://github.com/your-org/Lively.git
-cd Lively
-cp .env.example .env
-```
-
-Edit `.env` and insert your API keys (same as Step 3 above).
-
-### 2. Set Up the Python Virtual Environment
-
-```bash
-python -m venv .venv
-
-# Activate the virtual environment
-# Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-
-# Windows (CMD):
-.venv\Scripts\activate.bat
-
-# macOS / Linux:
-source .venv/bin/activate
-```
-
-### 3. Install Backend Dependencies
-
-```bash
-pip install --upgrade pip
-pip install -r backend/requirements.txt
-```
-
-### 4. Install Frontend Dependencies
-
-```bash
-cd frontend
-npm ci
-cd ..
-```
-
-### 5. Start the Cloudflare Tunnel
-
-Agora's Conversational AI Engine needs a publicly reachable URL to call your custom LLM endpoint. In a **new terminal**:
-
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
-
-Copy the generated `https://....trycloudflare.com` URL and set it in your `.env`:
-
-```env
-BACKEND_PUBLIC_URL=https://your-tunnel-url.trycloudflare.com
-```
-
-> Also copy `.env` into the `backend/` directory so FastAPI can read it:
-> ```bash
-> cp .env backend/.env
-> ```
-
-### 6. Start the FastAPI Backend
-
-```bash
-# Windows (PowerShell)
-$env:PYTHONPATH="backend"
-py -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# macOS / Linux
-PYTHONPATH=backend python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 7. Start the React Frontend
-
-In a **new terminal**:
-
-```bash
-cd frontend
-npm run dev
-```
-
-### 8. Open in Browser
-
-Navigate to **http://localhost:5173** — the Lively Sales Cockpit is ready.
+### 2. Backend (Render)
+- Deploy as a **Web Service** on [Render](https://render.com).
+- **Repository**: `https://github.com/anishsmit23/lively.git` (Branch: `main`)
+- **Environment**: `Python 3`
+- **Build Command**: `pip install -r backend/requirements.txt`
+- **Start Command**: `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables**:
+  - `BACKEND_PUBLIC_URL`: Your Render service URL (e.g. `https://lively-8s3x.onrender.com` without a trailing slash). *(Lively also automatically detects `RENDER_EXTERNAL_URL` if omitted).*
+  - `AGORA_APP_ID`, `AGORA_APP_CERTIFICATE`, `AGORA_REST_KEY`, `AGORA_REST_SECRET`
+  - `GROQ_API_KEY`
+  - `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` (for direct calendar email dispatches)
 
 <br/>
 
@@ -286,7 +222,7 @@ Navigate to **http://localhost:5173** — the Lively Sales Cockpit is ready.
 
 ## Demo Walkthrough
 
-Use the built-in **Scripted Demo Harness** tab or speak live into your microphone.
+Use the built-in **Scripted Demo Harness** tab or speak live into your microphone:
 
 <table>
 <tr>
@@ -316,8 +252,8 @@ Use the built-in **Scripted Demo Harness** tab or speak live into your microphon
 <tr>
 <td align="center"><strong>4</strong></td>
 <td><em>"Can we schedule a live technical walkthrough tomorrow at 2 PM EST?"</em></td>
-<td>Confirms the booking with date/time and displays the <strong>Outcome Achieved</strong> banner.</td>
-<td><code>book_meeting()</code> tool call → CRM update</td>
+<td>Confirms the booking, automatically dispatches the Google Meet bridge &amp; calendar invite to the buyer's email, and renders the confirmed meeting card.</td>
+<td>Autonomous <code>book_meeting()</code> → SMTP dispatch → CRM update</td>
 </tr>
 </table>
 
@@ -333,79 +269,55 @@ Lively/
 ├── install.bat                 # One-click dependency setup (Python venv, npm, cloudflared)
 ├── run.bat                     # One-click full system launcher (tunnel + backend + frontend)
 ├── run_separate.bat            # Launch each service in its own CMD window
+├── vercel.json                 # Vercel deployment configuration & API rewrites
 ├── .env.example                # Environment template with all configurable keys
-├── .env                        # Your actual API keys (private, tracked in repo)
+├── .env                        # Local credentials (git-ignored)
 │
 ├── backend/                     # FastAPI — Lively Intelligence Core
 │   ├── app/
-│   │   ├── main.py             # FastAPI application entry point & route registration
-│   │   ├── config.py           # Pydantic settings — env var loading & validation
+│   │   ├── main.py             # FastAPI entry point & router mounting
+│   │   ├── config.py           # Pydantic settings with auto Render URL fallback
 │   │   ├── api/                # REST & WebSocket route handlers
-│   │   ├── core/               # The brain
-│   │   │   ├── deal_state_engine.py   # Additive deal memory — merge, diff, change-log
+│   │   │   ├── deal_state.py   # State snapshots, contact capture & reset
+│   │   │   ├── llm_proxy.py    # OpenAI-compatible /v1/chat/completions endpoint
+│   │   │   └── tools.py        # Calendar booking & CRM sync endpoints
+│   │   ├── core/               # Cognitive Sales Engine
+│   │   │   ├── deal_state_engine.py   # Additive deal memory & autonomous booking
 │   │   │   ├── decision.py            # Next-best-action decision engine
 │   │   │   ├── llm_router.py          # Multi-provider LLM routing (Groq → NIM → fallback)
-│   │   │   ├── prompts.py            # System prompt templates & persona
+│   │   │   ├── prompts.py            # Persona & autonomous scheduling instructions
 │   │   │   ├── rag.py                # RAG retrieval interface
-│   │   │   ├── tools_defs.py         # OpenAI-format tool/function definitions
-│   │   │   └── tools_impl/           # Tool implementations (booking, CRM, escalation)
-│   │   ├── db/                 # Database models & session management (SQLite / Postgres)
-│   │   ├── models/             # Pydantic request/response schemas
-│   │   ├── routers/            # API route modules
-│   │   └── services/           # Service layer
-│   │       ├── agora_convo_api.py    # Agora Conversational AI agent lifecycle
-│   │       ├── agora_token.py        # RTC token generation
-│   │       ├── deal_state.py         # Deal state persistence & retrieval
-│   │       ├── llm_router.py         # LLM service orchestration
-│   │       ├── rag_service.py        # RAG service (in-memory or Pinecone)
-│   │       └── tools.py             # Tool execution service
+│   │   │   └── tools_defs.py         # Function calling definitions & auto-dispatch
+│   │   ├── services/
+│   │   │   ├── agora_convo_api.py    # Agora Conversational AI agent lifecycle
+│   │   │   ├── email_service.py      # SMTP & ICS calendar invite generator
+│   │   │   └── rag_service.py        # Battlecard knowledge base retriever
+│   │   └── routers/
+│   │       └── telemetry.py          # WebSocket telemetry connection manager
 │   ├── requirements.txt        # Core Python dependencies
-│   └── requirements-pinecone.txt  # Optional Pinecone semantic RAG packages
+│   └── tests/                  # Automated test suites
 │
 ├── frontend/                    # React Sales Cockpit — Vite + TypeScript + Tailwind
 │   ├── src/
-│   │   ├── App.tsx             # Root component — layout, state management, theme
-│   │   ├── index.css           # Global styles, dark/light theme, CSS variables
-│   │   ├── main.tsx            # React DOM entry point
+│   │   ├── App.tsx             # Root component with direct WS & polling fallback
+│   │   ├── index.css           # Global styles & design system tokens
 │   │   ├── components/
-│   │   │   ├── Navbar.tsx              # Top nav — logo, motto, playbook, theme toggle
-│   │   │   ├── LiveTranscriptStream.tsx # Real-time conversation transcript
+│   │   │   ├── Navbar.tsx              # Brand identity, email pill & theme toggle
+│   │   │   ├── LiveTranscriptStream.tsx # Real-time conversation turns
 │   │   │   ├── ObjectionBattlecards.tsx # Objection detection & response cards
-│   │   │   ├── DealStagePipeline.tsx    # Visual deal stage tracker (5 stages)
-│   │   │   ├── ActionItemsPanel.tsx     # Telemetry, latency, model stats, actions
-│   │   │   ├── AgentExpression.tsx      # Pixel-art agent face with emotion states
-│   │   │   ├── VoiceCallHud.tsx         # Voice call controls & status HUD
-│   │   │   ├── ScriptedDemoHarness.tsx  # Pre-scripted demo conversation runner
-│   │   │   ├── OutcomeBanner.tsx        # Success banner on deal outcomes
-│   │   │   ├── KnowledgeBaseModal.tsx   # RAG knowledge base viewer/editor
-│   │   │   ├── SandboxTester.tsx        # API sandbox testing panel
-│   │   │   └── AnalyticsDashboard.tsx   # Analytics & reporting dashboard
-│   │   ├── services/           # API client & WebSocket connection logic
-│   │   └── types/              # TypeScript interfaces & type definitions
+│   │   │   ├── DealStagePipeline.tsx    # Visual 5-stage pipeline tracker
+│   │   │   ├── ActionItemsPanel.tsx     # Live telemetry, TTFT & model stats
+│   │   │   ├── CalendarEventCard.tsx    # Clean Google Meet link & auto-dispatched status
+│   │   │   ├── OutcomeBanner.tsx        # Reserved outcome banner with Reset button
+│   │   │   └── VoiceCallHud.tsx         # WebRTC call controls & audio levels
+│   │   ├── services/
+│   │   │   └── api.ts                  # API client & WebSocket URL resolution
+│   │   └── types/                      # TypeScript schemas & state definitions
 │   └── public/
-│       └── logo.png            # Lively logo asset
+│       ├── logo-light.png      # Brand assets
+│       └── logo-dark.png
 │
-├── scripts/
-│   ├── launcher.py             # Orchestrates tunnel + backend + frontend processes
-│   └── free_ports.py           # Kills stale processes on ports 8000 & 5173
-│
-└── LIMITATIONS.md              # Known constraints & trade-offs
-```
-
-<br/>
-
----
-
-## Testing
-
-Run the automated test suite to verify memory, RAG, and tool execution:
-
-```bash
-# Activate virtual environment first
-.venv\Scripts\activate.bat
-
-# Run tests
-py backend/tests/test_phase6_7_8.py
+└── LIMITATIONS.md              # Architectural notes & future roadmap
 ```
 
 <br/>
@@ -416,35 +328,42 @@ py backend/tests/test_phase6_7_8.py
 
 | Variable | Required | Description |
 |:---|:---:|:---|
-| `AGORA_APP_ID` | Yes | Your Agora project App ID |
-| `AGORA_APP_CERTIFICATE` | Yes | Your Agora project App Certificate |
-| `AGORA_REST_KEY` | Yes | Agora RESTful API key |
-| `AGORA_REST_SECRET` | Yes | Agora RESTful API secret |
-| `GROQ_API_KEY` | * | Groq LPU API key — primary low-latency provider |
-| `GROQ_MODEL` | — | Model name (default: `llama-3.3-70b-versatile`) |
+| `AGORA_APP_ID` | Yes | Agora project App ID |
+| `AGORA_APP_CERTIFICATE` | Yes | Agora project App Certificate |
+| `AGORA_REST_KEY` | Yes | Agora REST API Key |
+| `AGORA_REST_SECRET` | Yes | Agora REST API Secret |
+| `GROQ_API_KEY` | Recommended | Groq LPU API key — primary low-latency voice turns |
+| `GROQ_MODEL` | — | Model name (default: `qwen/qwen3.8-27b`) |
 | `NVIDIA_NIM_API_KEY` | — | NVIDIA NIM API key — complex reasoning fallback |
-| `NVIDIA_NIM_BASE_URL` | — | NIM endpoint (default: `https://integrate.api.nvidia.com/v1`) |
 | `NVIDIA_NIM_MODEL` | — | NIM model (default: `meta/llama-3.1-70b-instruct`) |
-| `PINECONE_API_KEY` | — | Optional — enables semantic vector RAG |
-| `PINECONE_INDEX_NAME` | — | Pinecone index (default: `lively-rag`) |
-| `BACKEND_PUBLIC_URL` | Auto | Auto-set by `run.bat` — your Cloudflare tunnel URL |
-| `AGORA_AGENT_VOICE` | — | TTS voice (default: `en-US-JennyNeural`) |
-| `DEBUG` | — | Enable debug logging (default: `true`) |
-
-> * = At least one LLM provider key is required (Groq recommended).  
-> Auto = Automatically managed by `run.bat`.
+| `BACKEND_PUBLIC_URL` | Cloud | Public URL of the backend (e.g. `https://lively-8s3x.onrender.com`) without trailing slash |
+| `SMTP_HOST` | Email | Outgoing mail server (e.g. `smtp.gmail.com`) |
+| `SMTP_PORT` | Email | Port for TLS encryption (default: `587`) |
+| `SMTP_USER` | Email | Your authenticated mail account (e.g. `you@gmail.com`) |
+| `SMTP_PASSWORD` | Email | 16-character Google App Password |
+| `SMTP_FROM` | Email | Display header (`"Lively AI <you@gmail.com>"`) |
+| `SMTP_FROM_EMAIL` | Email | Sender address matching authenticated account |
+| `SMTP_USE_TLS` | Email | Enable TLS encryption (default: `true`) |
+| `AGORA_AGENT_VOICE` | — | Voice synthesis model (default: `en-US-JennyNeural`) |
+| `DEBUG` | — | Enable verbose debugging (default: `true`) |
 
 <br/>
 
 ---
 
-## Future Works
+## Testing
 
-- **ASR accuracy** may degrade in extremely noisy multi-speaker environments
-- **Cold-start latency** of ~100–150ms on the very first turn (TLS handshake overhead)
-- **RAG scope** is limited to indexed documents — unindexed queries are gracefully deflected
-- **Tool integrations** use high-fidelity mock stores in dev mode (production OAuth is a one-line swap)
-- **Language support** is English (en-US) in v1
+Run the automated test suite locally:
+
+```bash
+# Activate virtual environment
+.venv\Scripts\activate.bat   # Windows
+# source .venv/bin/activate  # macOS / Linux
+
+# Run test suites
+python backend/tests/test_phase6_7_8.py
+python backend/tests/test_email_and_contact.py
+```
 
 <br/>
 
