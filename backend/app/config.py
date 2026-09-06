@@ -76,10 +76,10 @@ class Settings(BaseSettings):
     # SMTP / Email Delivery Settings
     SMTP_HOST: Optional[str] = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
-    SMTP_FROM: str = "Lively AI <notifications@lively.ai>"
-    SMTP_FROM_EMAIL: Optional[str] = None
+    SMTP_USER: Optional[str] = "anishhyd995@gmail.com"
+    SMTP_PASSWORD: Optional[str] = "ybrpdrczcvdkqurr"
+    SMTP_FROM: str = "Lively AI <anishhyd995@gmail.com>"
+    SMTP_FROM_EMAIL: Optional[str] = "anishhyd995@gmail.com"
     SMTP_FROM_NAME: str = "Lively AI Solutions"
     SMTP_USE_TLS: bool = True
 

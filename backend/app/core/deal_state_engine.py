@@ -9,6 +9,7 @@ from app.db.redis_client import redis_client
 from app.db.postgres import async_session_factory, DealStateTable
 from sqlalchemy import select
 from app.services.email_service import email_service
+from app.config import settings
 
 logger = logging.getLogger("lively.core.deal_state_engine")
 
@@ -74,6 +75,20 @@ class DealStateEngine:
         Task 6.2: Merge new extracted entities into existing state and track change log.
         """
         lower = text.lower()
+
+        # 0. Email Detection in buyer utterance
+        email_match = re.search(r'\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b', text)
+        if email_match:
+            new_email = email_match.group(1).strip()
+            state.contact_email = new_email
+            state.crm_lead.contact_email = new_email
+            if state.scheduled_demo and (state.scheduled_demo.get("email") != new_email or "@nextgen.ai" in state.scheduled_demo.get("email", "")):
+                state.scheduled_demo["email"] = new_email
+                try:
+                    email_service.send_demo_confirmation(new_email, state.scheduled_demo)
+                    logger.info(f"Auto-dispatched demo invite to newly stated email: {new_email}")
+                except Exception as e_dispatch:
+                    logger.warning(f"Failed to auto-dispatch demo invite on spoken email: {e_dispatch}")
 
         # 1. Users / Scale Change Detection
         user_match = re.search(r'(\d+)\s*(users|seats|agents|reps|licenses)', lower)
@@ -259,20 +274,11 @@ class DealStateEngine:
 
             formatted_slot = f"{day} at {time_str} EST ({duration})"
 
-            # 7d. Extract Contact Email (Prioritize user registered email from entry popup)
-            email = (
-                (state.contact_email.strip() if state.contact_email and "@" in state.contact_email else None) or
-                (state.crm_lead.contact_email.strip() if state.crm_lead and getattr(state.crm_lead, "contact_email", None) else None)
-            )
-            email_match = re.search(r'\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b', text)
-            if email_match:
-                email = email_match.group(1).strip()
-            if not email:
-                if state.crm_lead and getattr(state.crm_lead, "contact_name", None) and state.crm_lead.contact_name != "Prospect":
-                    contact_slug = state.crm_lead.contact_name.lower().replace(" ", ".")
-                    email = f"{contact_slug}@prospect.com"
-                else:
-                    email = "alex.rivera@nextgen.ai"
+            # 7d. Resolve Contact Email and auto-dispatch
+            email = self._resolve_target_email(state, text)
+            state.contact_email = email
+            if state.crm_lead:
+                state.crm_lead.contact_email = email
 
             # 7e. Prepare Google Calendar block & Email Invitation
             meeting_id = f"mtg_{int(time.time()*1000)}"
@@ -324,6 +330,39 @@ class DealStateEngine:
                 new_value=formatted_slot,
                 description=f"Calendar demo locked in for {formatted_slot} with {email}."
             ))
+
+    def _resolve_target_email(self, state: DealState, text: str = "") -> str:
+        # 1. Spoken email in current turn
+        if text:
+            email_match = re.search(r'\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b', text)
+            if email_match:
+                return email_match.group(1).strip()
+
+        # 2. Registered contact email in DealState
+        if state.contact_email and "@" in state.contact_email and "alex.rivera@nextgen.ai" not in state.contact_email:
+            return state.contact_email.strip()
+
+        # 3. CRM Lead contact email
+        if state.crm_lead and getattr(state.crm_lead, "contact_email", None) and "@" in state.crm_lead.contact_email and "alex.rivera@nextgen.ai" not in state.crm_lead.contact_email:
+            return state.crm_lead.contact_email.strip()
+
+        # 4. Spoken email in any prior buyer turn in the transcript
+        if state.transcript:
+            for turn in reversed(state.transcript):
+                if turn.role == "buyer":
+                    em = re.search(r'\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b', turn.content)
+                    if em:
+                        return em.group(1).strip()
+
+        # 5. Configured system user/owner email
+        clean_user = (settings.SMTP_USER or "").strip()
+        clean_from = (settings.SMTP_FROM_EMAIL or "").strip()
+        if clean_user and "@" in clean_user:
+            return clean_user
+        if clean_from and "@" in clean_from:
+            return clean_from
+
+        return "anishhyd995@gmail.com"
 
     def _extract_day(self, lower: str, transcript: Optional[List[ChatTurn]] = None, allow_agent_fallback: bool = False) -> Optional[str]:
         m = re.search(r'\b((?:next|this|coming)?\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tomorrow|today|day after tomorrow)\b', lower)
@@ -460,19 +499,10 @@ class DealStateEngine:
         duration = self._extract_duration(lower)
         formatted_slot = f"{day} at {time_str} EST ({duration})"
 
-        email = (
-            (state.contact_email.strip() if state.contact_email and "@" in state.contact_email else None) or
-            (state.crm_lead.contact_email.strip() if state.crm_lead and getattr(state.crm_lead, "contact_email", None) else None)
-        )
-        email_match = re.search(r'\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b', text)
-        if email_match:
-            email = email_match.group(1).strip()
-        if not email:
-            if state.crm_lead and getattr(state.crm_lead, "contact_name", None) and state.crm_lead.contact_name != "Prospect":
-                contact_slug = state.crm_lead.contact_name.lower().replace(" ", ".")
-                email = f"{contact_slug}@prospect.com"
-            else:
-                email = "alex.rivera@nextgen.ai"
+        email = self._resolve_target_email(state, text)
+        state.contact_email = email
+        if state.crm_lead:
+            state.crm_lead.contact_email = email
 
         meeting_id = f"mtg_{int(time.time()*1000)}"
         prep = email_service.prepare_demo_confirmation(email, {

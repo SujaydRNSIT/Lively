@@ -47,3 +47,33 @@ async def test_set_contact_endpoint_and_state():
         assert demo_data["email"] == "sarah.connor@cyberdyne.ai"
         assert "google_calendar_link" in demo_data
         assert "dates=" in demo_data["google_calendar_link"]
+
+def test_auto_dispatch_defaults_to_anishhyd995():
+    channel = "test_default_anish_email_channel"
+    state = deal_state_engine.record_turn(
+        channel,
+        "buyer",
+        "Can we schedule a demo for tomorrow at 2 PM?"
+    )
+    assert state.scheduled_demo is not None
+    assert state.scheduled_demo["email"] == "anishhyd995@gmail.com"
+    assert "Tomorrow" in state.scheduled_demo["time"]
+    assert "2:00 PM" in state.scheduled_demo["time"]
+    assert any("anishhyd995@gmail.com" in note for note in state.action_items)
+
+def test_spoken_email_updates_contact_and_demo():
+    channel = "test_spoken_email_channel"
+    deal_state_engine.record_turn(
+        channel,
+        "buyer",
+        "Please schedule a demo for Friday at 3 PM"
+    )
+    # Then buyer says their email
+    state = deal_state_engine.record_turn(
+        channel,
+        "buyer",
+        "My email address is anishhyd995@gmail.com"
+    )
+    assert state.contact_email == "anishhyd995@gmail.com"
+    assert state.scheduled_demo is not None
+    assert state.scheduled_demo["email"] == "anishhyd995@gmail.com"

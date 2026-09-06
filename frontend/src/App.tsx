@@ -82,9 +82,9 @@ export const App: React.FC = () => {
   const [isKnowledgeOpen, setIsKnowledgeOpen] = useState<boolean>(false);
   const [userEmail, setUserEmail] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('lively_user_email') || '';
+      return localStorage.getItem('lively_user_email') || 'anishhyd995@gmail.com';
     }
-    return '';
+    return 'anishhyd995@gmail.com';
   });
   const [userName, setUserName] = useState<string>(() => {
     if (typeof window !== 'undefined') {
