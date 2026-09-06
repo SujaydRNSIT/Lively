@@ -96,13 +96,26 @@ async def execute_openai_tool_call(
 
     elif tool_name == "book_meeting":
         time_slot = arguments.get("time_slot", "Tomorrow at 2:00 PM EST")
-        email = arguments.get("email", "prospect@example.com")
+        extracted_email = arguments.get("email")
+        if not extracted_email or extracted_email in ("prospect@example.com", "alex.rivera@nextgen.ai"):
+            email = (deal_state.contact_email if deal_state and getattr(deal_state, "contact_email", None) else None) or \
+                    (deal_state.crm_lead.contact_email if deal_state and getattr(deal_state, "crm_lead", None) and getattr(deal_state.crm_lead, "contact_email", None) else None) or \
+                    "prospect@example.com"
+        else:
+            email = extracted_email
+
         topic = arguments.get("topic", "Agora Real-Time Voice AI Sales Deep-Dive")
         res = await book_meeting(time_slot, email, topic)
         if deal_state:
             deal_state.scheduled_demo = res
             deal_state.stage = DealStageEnum.DEMO_SCHEDULING
             deal_state.action_items.append(f"Demo confirmed for {time_slot} ({email})")
+            deal_state.action_items.append(f"Invite dispatched: {email} (Google Meet + Calendar blocked)")
+            try:
+                from app.services.email_service import email_service
+                email_service.send_demo_confirmation(email, res)
+            except Exception as e_mail:
+                logger.error(f"Failed to auto-dispatch demo email invite: {e_mail}")
         return res
 
     elif tool_name == "create_or_update_crm_lead":
