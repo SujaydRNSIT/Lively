@@ -179,15 +179,42 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Sync WebSocket Telemetry on channel change
+  // Sync WebSocket Telemetry on channel change with resilient auto-reconnect & polling fallback
   useEffect(() => {
     if (!channelName) return;
 
-    fetchDealState(channelName)
-      .then(setDealState)
-      .catch(() => {});
+    let isMounted = true;
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
 
-    const backendEnv = (import.meta.env.VITE_BACKEND_URL || '').trim();
+    // 1. Initial & periodic polling fallback so UI is never blank even if WebSocket fails
+    const syncDealState = async () => {
+      try {
+        const state = await fetchDealState(channelName);
+        if (isMounted && state) {
+          setDealState(prev => {
+            const hasNewTurns = (state.transcript?.length || 0) > (prev.transcript?.length || 0);
+            const hasNewObjections = (state.active_objections?.length || 0) !== (prev.active_objections?.length || 0);
+            const isNewer = (state.updated_at || 0) > (prev.updated_at || 0);
+            if (hasNewTurns || hasNewObjections || isNewer) {
+              return state;
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        // Silently retry on next tick
+      }
+    };
+
+    syncDealState();
+    const pollInterval = setInterval(syncDealState, 2000);
+
+    // 2. Resolve WebSocket URL (fallback to production Render backend if running on Vercel/production)
+    const defaultProdBackend = 'https://lively-8s3x.onrender.com';
+    const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const backendEnv = (import.meta.env.VITE_BACKEND_URL || (isLocal ? '' : defaultProdBackend)).trim();
+
     let wsUrl = '';
     if (backendEnv) {
       const cleanHost = backendEnv.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -199,58 +226,74 @@ export const App: React.FC = () => {
       wsUrl = `${wsProtocol}//${wsHost}/api/ws/telemetry/${encodeURIComponent(channelName)}`;
     }
 
-    
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log('[WS] Connected to', wsUrl);
-    };
-
-    ws.onerror = (err) => {
-      console.error('[WS] Error:', err);
-    };
-
-    ws.onclose = (ev) => {
-      console.log('[WS] Closed:', ev.code, ev.reason);
-    };
-
-    ws.onmessage = (event) => {
+    const connectWebSocket = () => {
+      if (!isMounted) return;
       try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'DEAL_STATE_SNAPSHOT' || msg.type === 'DEAL_STATE_UPDATE') {
-          setDealState(msg.data);
-        } else if (msg.type === 'AGENT_STATUS') {
-          setAgentStatus(msg.data.status);
-        } else if (msg.type === 'TRANSCRIPT_TURN') {
-          if (msg.data.role === 'agent') {
-            setAgentStatus('speaking');
-          } else if (msg.data.role === 'buyer') {
-            setAgentStatus('listening');
+        ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log('[WS] Connected to', wsUrl);
+        };
+
+        ws.onerror = (err) => {
+          console.warn('[WS] Telemetry connection warning:', err);
+        };
+
+        ws.onclose = (ev) => {
+          console.log('[WS] Closed:', ev.code, ev.reason);
+          if (isMounted) {
+            reconnectTimeout = setTimeout(connectWebSocket, 3000);
           }
-          if (msg.data.deal_state) {
-            setDealState(msg.data.deal_state);
-          } else {
-            setDealState((prev) => ({
-              ...prev,
-              transcript: [
-                ...prev.transcript,
-                {
-                  role: msg.data.role,
-                  content: msg.data.text,
-                  timestamp: Date.now() / 1000
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'DEAL_STATE_SNAPSHOT' || msg.type === 'DEAL_STATE_UPDATE') {
+              if (isMounted) setDealState(msg.data);
+            } else if (msg.type === 'AGENT_STATUS') {
+              if (isMounted) setAgentStatus(msg.data.status);
+            } else if (msg.type === 'TRANSCRIPT_TURN') {
+              if (isMounted) {
+                if (msg.data.role === 'agent') {
+                  setAgentStatus('speaking');
+                } else if (msg.data.role === 'buyer') {
+                  setAgentStatus('listening');
                 }
-              ]
-            }));
+                if (msg.data.deal_state) {
+                  setDealState(msg.data.deal_state);
+                } else {
+                  setDealState((prev) => ({
+                    ...prev,
+                    transcript: [
+                      ...prev.transcript,
+                      {
+                        role: msg.data.role,
+                        content: msg.data.text || msg.data.content || '',
+                        timestamp: Date.now() / 1000
+                      }
+                    ]
+                  }));
+                }
+              }
+            }
+          } catch (e) {
+            console.error('WS parse error:', e);
           }
-        }
-      } catch (e) {
-        console.error('WS parse error:', e);
+        };
+      } catch (err) {
+        console.warn('Failed to initialize WebSocket, polling is active:', err);
       }
     };
 
+    connectWebSocket();
+
     return () => {
-      ws.close();
+      isMounted = false;
+      clearInterval(pollInterval);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
     };
   }, [channelName]);
 
