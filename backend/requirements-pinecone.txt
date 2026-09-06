@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# Optional semantic retrieval stack. install.bat installs this only when
+# PINECONE_API_KEY is configured in the project .env file.
+pinecone-client>=3.0.0
+sentence-transformers>=2.5.0

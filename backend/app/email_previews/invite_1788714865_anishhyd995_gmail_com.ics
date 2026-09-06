@@ -1,0 +1,23 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Lively AI//Sales Engine//EN
+CALSCALE:GREGORIAN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:mtg_1788714865201@lively.ai
+DTSTAMP:20260906T171425Z
+DTSTART:20260910T190000Z
+DTEND:20260910T193000Z
+SUMMARY:Lively AI Demo: Lively Real-Time Voice AI Sales Deep-Dive
+DESCRIPTION:Lively Voice AI Product Walkthrough\nTopic: Lively Real-Time Voice AI Sales Deep-Dive\nHost: Senior Solutions Architect\nAttendee: anishhyd995@gmail.com\nGoogle Meet Bridge: https://meet.google.com/new\n\nAgenda:\n1. Live Sub-300ms RTC Voice Demo\n2. Objection Handling & RAG Architecture\n3. Enterprise CRM & Live Handoffs
+LOCATION:https://meet.google.com/new
+STATUS:CONFIRMED
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=anishhyd995@gmail.com:mailto:anishhyd995@gmail.com
+ORGANIZER;CN=Lively AI:mailto:notifications@lively.ai
+BEGIN:VALARM
+TRIGGER:-PT15M
+ACTION:DISPLAY
+DESCRIPTION:Reminder: Lively AI Demo Walkthrough in 15 minutes
+END:VALARM
+END:VEVENT
+END:VCALENDAR

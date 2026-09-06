@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://lively-8s3x.onrender.com/api/:path*"
+    },
+    {
+      "source": "/v1/:path*",
+      "destination": "https://lively-8s3x.onrender.com/v1/:path*"
+    }
+  ]
+}

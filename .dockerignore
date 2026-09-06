@@ -1,0 +1,10 @@
+.git
+.venv
+venv
+node_modules
+frontend/node_modules
+cloudflared.exe
+__pycache__
+*.pyc
+.pytest_cache
+*.db

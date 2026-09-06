@@ -1,0 +1,580 @@
+import os
+import re
+import time
+import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Any, Optional, Tuple
+from urllib.parse import quote
+
+from app.config import settings
+
+logger = logging.getLogger("lively.services.email")
+
+WEEKDAYS = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6
+}
+
+
+def parse_slot_to_datetimes(slot_str: str) -> Tuple[datetime, datetime]:
+    """
+    Parses natural language strings like 'Thursday at 2:00 PM EST', 'Tomorrow at 10:00 AM', 
+    or 'Friday 3 PM' into UTC start and end datetimes.
+    """
+    now = datetime.now(timezone.utc)
+    lower = slot_str.lower()
+
+    # Determine target date
+    target_date = now.date()
+
+    if "tomorrow" in lower:
+        target_date = target_date + timedelta(days=1)
+    else:
+        for day_name, day_idx in WEEKDAYS.items():
+            if day_name in lower:
+                current_weekday = target_date.weekday()
+                days_ahead = (day_idx - current_weekday) % 7
+                if days_ahead == 0:
+                    days_ahead = 7  # Next week's weekday if today is the day
+                target_date = target_date + timedelta(days=days_ahead)
+                break
+
+    # Determine target time
+    hour = 14  # default 2 PM
+    minute = 0
+    is_pm = True
+
+    # Look for patterns like '2:00 PM', '10:30 am', '2 pm', '14:00'
+    time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', lower)
+    if time_match:
+        h = int(time_match.group(1))
+        m = int(time_match.group(2)) if time_match.group(2) else 0
+        meridiem = time_match.group(3)
+
+        if meridiem == "pm" and h < 12:
+            h += 12
+        elif meridiem == "am" and h == 12:
+            h = 0
+        elif not meridiem and h < 8:
+            # Assume PM for typical business hours 1..7
+            h += 12
+
+        hour = h
+        minute = m
+
+    # Parse duration
+    duration_minutes = 30
+    dur_match = re.search(r'(\d+)\s*(?:-| )(?:minute|min)', lower)
+    if dur_match:
+        duration_minutes = int(dur_match.group(1))
+
+    # Construct start and end datetime in UTC (approximating EST as UTC-5 / UTC-4)
+    # If EST is specified, adjust 5 hours to UTC
+    tz_offset_hours = 0
+    if "est" in lower or "edt" in lower:
+        tz_offset_hours = 5
+    elif "pst" in lower or "pdt" in lower:
+        tz_offset_hours = 8
+    elif "cst" in lower or "cdt" in lower:
+        tz_offset_hours = 6
+
+    naive_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
+    # Add offset to convert to UTC
+    start_utc = (naive_dt + timedelta(hours=tz_offset_hours)).replace(tzinfo=timezone.utc)
+    end_utc = start_utc + timedelta(minutes=duration_minutes)
+
+    return start_utc, end_utc
+
+
+def build_google_calendar_url(
+    title: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    details: str,
+    location: str
+) -> str:
+    """
+    Builds a Google Calendar web blocking URL that pre-fills the exact date, time, title, Meet link, and agenda.
+    Format: https://calendar.google.com/calendar/render?action=TEMPLATE&text=...&dates=START/END&details=...&location=...
+    """
+    fmt = "%Y%m%dT%H%M%SZ"
+    start_str = start_dt.strftime(fmt)
+    end_str = end_dt.strftime(fmt)
+    dates_param = f"{start_str}/{end_str}"
+
+    base_url = "https://calendar.google.com/calendar/render"
+    params = [
+        ("action", "TEMPLATE"),
+        ("text", title),
+        ("dates", dates_param),
+        ("details", details),
+        ("location", location),
+        ("trp", "true")
+    ]
+    query_str = "&".join(f"{k}={quote(v)}" for k, v in params)
+    return f"{base_url}?{query_str}"
+
+
+def generate_ics_calendar(
+    uid: str,
+    title: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    details: str,
+    location: str,
+    attendee_email: str
+) -> str:
+    """
+    Generates an RFC 5545 compliant iCalendar string for universal calendar blocking.
+    """
+    now_fmt = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    fmt = "%Y%m%dT%H%M%SZ"
+    dtstart = start_dt.strftime(fmt)
+    dtend = end_dt.strftime(fmt)
+
+    # Clean description for ICS (escape newlines)
+    clean_details = details.replace("\r\n", "\\n").replace("\n", "\\n")
+
+    ics_lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Lively AI//Sales Engine//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:REQUEST",
+        "BEGIN:VEVENT",
+        f"UID:{uid}@lively.ai",
+        f"DTSTAMP:{now_fmt}",
+        f"DTSTART:{dtstart}",
+        f"DTEND:{dtend}",
+        f"SUMMARY:{title}",
+        f"DESCRIPTION:{clean_details}",
+        f"LOCATION:{location}",
+        "STATUS:CONFIRMED",
+        f"ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN={attendee_email}:mailto:{attendee_email}",
+        "ORGANIZER;CN=Lively AI:mailto:notifications@lively.ai",
+        "BEGIN:VALARM",
+        "TRIGGER:-PT15M",
+        "ACTION:DISPLAY",
+        "DESCRIPTION:Reminder: Lively AI Demo Walkthrough in 15 minutes",
+        "END:VALARM",
+        "END:VEVENT",
+        "END:VCALENDAR"
+    ]
+    return "\r\n".join(ics_lines) + "\r\n"
+
+
+def render_html_email(
+    recipient_email: str,
+    meeting_time: str,
+    meet_link: str,
+    calendar_link: str,
+    topic: str = "Lively Real-Time Voice AI Sales Deep-Dive",
+    host: str = "Senior Solutions Architect"
+) -> str:
+    """
+    Renders an editorial, high-end HTML email with Lively's palette,
+    featuring the meeting details, direct Google Meet button, and Add to Calendar block.
+    """
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Lively AI Demo is Confirmed</title>
+  <style>
+    body {{
+      margin: 0;
+      padding: 0;
+      background-color: #f7f6f2;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #20201e;
+      -webkit-font-smoothing: antialiased;
+    }}
+    .wrapper {{
+      max-width: 600px;
+      margin: 40px auto;
+      background: #ffffff;
+      border: 1px solid #e5e3dc;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+    }}
+    .header {{
+      padding: 36px 40px 24px;
+      border-bottom: 1px solid #f0eee6;
+      background: #ffffff;
+    }}
+    .tag {{
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #6166cf;
+      background: #f0f1fa;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      margin-bottom: 14px;
+    }}
+    .title {{
+      font-family: "Newsreader", Georgia, serif;
+      font-size: 28px;
+      font-weight: 500;
+      line-height: 1.25;
+      color: #1a1a18;
+      margin: 0 0 8px;
+    }}
+    .subtitle {{
+      font-size: 14px;
+      color: #696862;
+      margin: 0;
+      line-height: 1.5;
+    }}
+    .content {{
+      padding: 32px 40px;
+    }}
+    .card {{
+      background: #faf9f5;
+      border: 1px solid #ebe8de;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 28px;
+    }}
+    .card-row {{
+      display: flex;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }}
+    .card-row:last-child {{
+      margin-bottom: 0;
+    }}
+    .card-label {{
+      width: 110px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8c8a82;
+      padding-top: 2px;
+    }}
+    .card-value {{
+      font-weight: 600;
+      color: #20201e;
+      flex: 1;
+    }}
+    .button-group {{
+      margin: 32px 0 24px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }}
+    .btn-primary {{
+      display: inline-block;
+      background: #6166cf;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      text-align: center;
+    }}
+    .btn-secondary {{
+      display: inline-block;
+      background: #ffffff;
+      color: #20201e !important;
+      text-decoration: none;
+      padding: 13px 24px;
+      border-radius: 10px;
+      border: 1px solid #d5d2c7;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      text-align: center;
+    }}
+    .agenda {{
+      border-top: 1px solid #f0eee6;
+      padding-top: 24px;
+      margin-top: 24px;
+    }}
+    .agenda h4 {{
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #20201e;
+      margin: 0 0 12px;
+    }}
+    .agenda ul {{
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      color: #55544e;
+      line-height: 1.6;
+    }}
+    .footer {{
+      padding: 24px 40px;
+      background: #f7f6f2;
+      border-top: 1px solid #ebe8de;
+      text-align: center;
+      font-size: 11px;
+      color: #8c8a82;
+      line-height: 1.5;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="tag">Reservation Confirmed</div>
+      <h1 class="title">Your Product Walkthrough is Locked In</h1>
+      <p class="subtitle">Thank you for connecting with Lively. A dedicated technical sales architect has been assigned to your session.</p>
+    </div>
+
+    <div class="content">
+      <div class="card">
+        <div class="card-row">
+          <div class="card-label">Date & Time</div>
+          <div class="card-value" style="color: #6166cf; font-size: 16px;">{meeting_time}</div>
+        </div>
+        <div class="card-row">
+          <div class="card-label">Format</div>
+          <div class="card-value">30-Minute Video Consultation & Technical Deep-Dive</div>
+        </div>
+        <div class="card-row">
+          <div class="card-label">Host</div>
+          <div class="card-value">{host}</div>
+        </div>
+        <div class="card-row">
+          <div class="card-label">Topic</div>
+          <div class="card-value">{topic}</div>
+        </div>
+        <div class="card-row">
+          <div class="card-label">Attendee</div>
+          <div class="card-value">{recipient_email}</div>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="{meet_link}" class="btn-primary" target="_blank" style="margin-right: 8px;">
+          📹 Join Google Meet Room
+        </a>
+        <a href="{calendar_link}" class="btn-secondary" target="_blank">
+          📅 Block on Google Calendar
+        </a>
+      </div>
+
+      <div class="agenda">
+        <h4>Discussion Agenda</h4>
+        <ul>
+          <li><strong>Sub-300ms Conversational Voice AI</strong>: Live latency & full-duplex acoustic demonstration.</li>
+          <li><strong>Autonomous Objection Handling</strong>: Real-time RAG & programmatic battlecards.</li>
+          <li><strong>Enterprise Integration</strong>: CRM synchronization, lead routing, and telemetry APIs.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      Lively AI Sales Agent Platform &bull; Real-Time Voice Infrastructure<br />
+      Need to reschedule? Reply to this email or re-enter the session at any time.
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
+class EmailService:
+    def __init__(self):
+        self.previews_dir = os.path.join(os.path.dirname(__file__), "..", "email_previews")
+        os.makedirs(self.previews_dir, exist_ok=True)
+
+    def prepare_demo_confirmation(
+        self,
+        to_email: str,
+        meeting_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Prepares meeting times, Google Calendar blocking URL, ICS invitation, and rendered HTML.
+        """
+        time_slot = meeting_data.get("time", "Tomorrow at 2:00 PM EST")
+        topic = meeting_data.get("topic", "Lively Real-Time Voice AI Sales Deep-Dive")
+        host = meeting_data.get("host", "Senior Solutions Architect")
+        meet_link = meeting_data.get("meeting_link", "https://meet.google.com/new")
+        meeting_id = meeting_data.get("meeting_id", f"mtg_{int(time.time())}")
+
+        # Parse start and end times for Google Calendar and ICS
+        start_dt, end_dt = parse_slot_to_datetimes(time_slot)
+
+        details = (
+            f"Lively Voice AI Product Walkthrough\n"
+            f"Topic: {topic}\n"
+            f"Host: {host}\n"
+            f"Attendee: {to_email}\n"
+            f"Google Meet Bridge: {meet_link}\n\n"
+            f"Agenda:\n"
+            f"1. Live Sub-300ms RTC Voice Demo\n"
+            f"2. Objection Handling & RAG Architecture\n"
+            f"3. Enterprise CRM & Live Handoffs"
+        )
+
+        # 1. Google Calendar URL
+        gcal_url = build_google_calendar_url(
+            title=f"Lively AI Demo: {topic}",
+            start_dt=start_dt,
+            end_dt=end_dt,
+            details=details,
+            location=meet_link
+        )
+
+        # 2. ICS calendar content
+        ics_content = generate_ics_calendar(
+            uid=meeting_id,
+            title=f"Lively AI Demo: {topic}",
+            start_dt=start_dt,
+            end_dt=end_dt,
+            details=details,
+            location=meet_link,
+            attendee_email=to_email
+        )
+
+        # 3. HTML email content
+        html_content = render_html_email(
+            recipient_email=to_email,
+            meeting_time=time_slot,
+            meet_link=meet_link,
+            calendar_link=gcal_url,
+            topic=topic,
+            host=host
+        )
+
+        # 4. Plaintext email content
+        plain_content = (
+            f"Lively AI - Demo Confirmed\n\n"
+            f"Hello,\n"
+            f"Your product walkthrough has been scheduled for {time_slot}.\n\n"
+            f"Google Meet Link: {meet_link}\n"
+            f"Block on Google Calendar: {gcal_url}\n\n"
+            f"Host: {host}\n"
+            f"Topic: {topic}\n\n"
+            f"We look forward to speaking with you.\n"
+            f"- The Lively AI Team"
+        )
+
+        return {
+            "to_email": to_email,
+            "meeting_id": meeting_id,
+            "time_slot": time_slot,
+            "start_dt": start_dt.isoformat(),
+            "end_dt": end_dt.isoformat(),
+            "google_calendar_url": gcal_url,
+            "ics_content": ics_content,
+            "html_content": html_content,
+            "plain_content": plain_content,
+            "meet_link": meet_link
+        }
+
+    def send_demo_confirmation(
+        self,
+        to_email: str,
+        meeting_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Sends the confirmation email with the Google Meet link and attached .ics calendar block.
+        If SMTP is unconfigured or unavailable, stores the rendered email and .ics artifact to disk.
+        """
+        clean_email = to_email.strip()
+        if not clean_email or "@" not in clean_email:
+            logger.warning(f"Invalid email recipient: '{to_email}'. Skipping email dispatch.")
+            return {"status": "error", "message": "Invalid recipient email address"}
+
+        prep = self.prepare_demo_confirmation(clean_email, meeting_data)
+        subject = f"Confirmed: Lively AI Demo on {prep['time_slot']}"
+
+        # Create multipart message
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = settings.SMTP_FROM
+        msg["To"] = clean_email
+
+        # Message body (alternative plain + html)
+        alt_body = MIMEMultipart("alternative")
+        alt_body.attach(MIMEText(prep["plain_content"], "plain", "utf-8"))
+        alt_body.attach(MIMEText(prep["html_content"], "html", "utf-8"))
+        msg.attach(alt_body)
+
+        # Attach .ics calendar invite
+        try:
+            ics_attachment = MIMEBase("text", "calendar", method="REQUEST", name="invite.ics")
+            ics_attachment.set_payload(prep["ics_content"].encode("utf-8"))
+            encoders.encode_base64(ics_attachment)
+            ics_attachment.add_header("Content-Disposition", "attachment; filename=invite.ics")
+            ics_attachment.add_header("Content-Class", "urn:content-classes:calendarmessage")
+            msg.attach(ics_attachment)
+        except Exception as e:
+            logger.warning(f"Failed to attach ICS payload: {e}")
+
+        # Check SMTP settings
+        smtp_configured = bool(settings.SMTP_HOST)
+        smtp_success = False
+
+        if smtp_configured:
+            try:
+                logger.info(f"Connecting to SMTP server {settings.SMTP_HOST}:{settings.SMTP_PORT}...")
+                if settings.SMTP_PORT == 465:
+                    server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+                else:
+                    server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+                    if settings.SMTP_USE_TLS:
+                        server.starttls()
+
+                if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+
+                server.sendmail(settings.SMTP_FROM, [clean_email], msg.as_string())
+                server.quit()
+                smtp_success = True
+                logger.info(f"Demo confirmation email successfully dispatched via SMTP to {clean_email}")
+            except Exception as e:
+                logger.error(f"SMTP delivery failed: {e}. Falling back to preview recording.")
+
+        # Always save local preview files for inspection and robust testing
+        preview_id = f"{int(time.time())}_{re.sub(r'[^a-zA-Z0-9]', '_', clean_email)}"
+        html_file = os.path.join(self.previews_dir, f"email_{preview_id}.html")
+        ics_file = os.path.join(self.previews_dir, f"invite_{preview_id}.ics")
+
+        with open(html_file, "w", encoding="utf-8") as f:
+            f.write(prep["html_content"])
+
+        with open(ics_file, "w", encoding="utf-8") as f:
+            f.write(prep["ics_content"])
+
+        logger.info(f"Saved email preview to {html_file} and calendar invite to {ics_file}")
+
+        return {
+            "status": "success",
+            "delivered": smtp_success,
+            "mode": "smtp" if smtp_success else "preview_saved",
+            "recipient": clean_email,
+            "google_calendar_url": prep["google_calendar_url"],
+            "google_meet_link": prep["meet_link"],
+            "preview_html": html_file,
+            "preview_ics": ics_file
+        }
+
+
+# Global singleton instance
+email_service = EmailService()
