@@ -504,10 +504,14 @@ class EmailService:
         prep = self.prepare_demo_confirmation(clean_email, meeting_data)
         subject = f"Confirmed: Lively AI Demo on {prep['time_slot']}"
 
+        clean_user = settings.SMTP_USER.strip() if settings.SMTP_USER else None
+        clean_password = settings.SMTP_PASSWORD.replace(" ", "").strip() if settings.SMTP_PASSWORD else None
+        from_header = f"{settings.SMTP_FROM_NAME or 'Lively AI'} <{clean_user}>" if clean_user else settings.SMTP_FROM
+
         # Create multipart message
         msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
-        msg["From"] = settings.SMTP_FROM
+        msg["From"] = from_header
         msg["To"] = clean_email
 
         # Message body (alternative plain + html)
@@ -528,12 +532,13 @@ class EmailService:
             logger.warning(f"Failed to attach ICS payload: {e}")
 
         # Check SMTP settings
-        smtp_configured = bool(settings.SMTP_HOST)
+        smtp_configured = bool(settings.SMTP_HOST and clean_user and clean_password)
         smtp_success = False
+        smtp_error = None
 
         if smtp_configured:
             try:
-                logger.info(f"Connecting to SMTP server {settings.SMTP_HOST}:{settings.SMTP_PORT}...")
+                logger.info(f"Connecting to SMTP server {settings.SMTP_HOST}:{settings.SMTP_PORT} as {clean_user}...")
                 if settings.SMTP_PORT == 465:
                     server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
                 else:
@@ -541,15 +546,17 @@ class EmailService:
                     if settings.SMTP_USE_TLS:
                         server.starttls()
 
-                if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-
-                server.sendmail(settings.SMTP_FROM, [clean_email], msg.as_string())
+                server.login(clean_user, clean_password)
+                sender_addr = clean_user if ("gmail" in (settings.SMTP_HOST or "").lower()) else (settings.SMTP_FROM_EMAIL or clean_user)
+                server.sendmail(sender_addr, [clean_email], msg.as_string())
                 server.quit()
                 smtp_success = True
                 logger.info(f"Demo confirmation email successfully dispatched via SMTP to {clean_email}")
             except Exception as e:
+                smtp_error = str(e)
                 logger.error(f"SMTP delivery failed: {e}. Falling back to preview recording.")
+        else:
+            smtp_error = "SMTP credentials (SMTP_USER / SMTP_PASSWORD) not configured in environment."
 
         # Always save local preview files for inspection and robust testing
         preview_id = f"{int(time.time())}_{re.sub(r'[^a-zA-Z0-9]', '_', clean_email)}"
@@ -568,6 +575,7 @@ class EmailService:
             "status": "success",
             "delivered": smtp_success,
             "mode": "smtp" if smtp_success else "preview_saved",
+            "error": smtp_error,
             "recipient": clean_email,
             "google_calendar_url": prep["google_calendar_url"],
             "google_meet_link": prep["meet_link"],

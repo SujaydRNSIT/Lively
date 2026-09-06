@@ -46,9 +46,17 @@ async def set_deal_contact(channel_name: str, req: SetContactRequest):
         state.company = req.company.strip()
         state.crm_lead.company = req.company.strip()
 
-    # If demo already exists with placeholder email, update it
-    if state.scheduled_demo and (not state.scheduled_demo.get("email") or "@nextgen.ai" in state.scheduled_demo.get("email", "")):
+    # If demo already exists with placeholder email, update it and dispatch invite
+    if state.scheduled_demo:
+        old_email = state.scheduled_demo.get("email", "")
         state.scheduled_demo["email"] = clean_email
+        if "@nextgen.ai" in old_email or not old_email or old_email != clean_email:
+            try:
+                from app.services.email_service import email_service
+                email_service.send_demo_confirmation(clean_email, state.scheduled_demo)
+                logger.info(f"Dispatched demo invitation to newly registered contact email: {clean_email}")
+            except Exception as e_dispatch:
+                logger.warning(f"Could not dispatch email on set-contact: {e_dispatch}")
 
     logger.info(f"Updated contact on channel {channel_name}: {clean_email} ({state.contact_name})")
 
