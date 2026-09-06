@@ -63,3 +63,4 @@ cloudflared.exe
 .agents/
 .codegraph/
 .gemini/
+backend/app/email_previews/

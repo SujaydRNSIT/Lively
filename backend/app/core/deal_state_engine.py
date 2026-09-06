@@ -179,38 +179,83 @@ class DealStateEngine:
                 state.active_objections.append(rec)
 
         # 7. Demo Stage & Calendar Booking Trigger
-        has_demo_word = any(k in lower for k in ["demo", "walkthrough", "meeting", "calendar", "call", "appointment", "slot"])
-        has_action_word = any(k in lower for k in [
-            "schedule", "scheduled", "book", "booked", "booking", "fix", "fixing",
-            "set up", "lock", "locked", "locking", "reserve", "reserved",
-            "arrange", "confirm", "confirmed", "take"
-        ])
-        has_agreement = any(k in lower for k in [
-            "yes", "sure", "sounds good", "perfect", "that works", "works for me",
-            "let's do it", "lock it in", "lock it", "lock that", "go ahead", "confirmed"
-        ])
-        has_duration = bool(re.search(r'\b(\d+\s*(?:mins|minutes|min|hour|hours)|half(?:\s+an)?\s+hour|thirty-minute|ten-minute)\b', lower))
+        # If demo is already booked & confirmed, only re-trigger if buyer explicitly asks to reschedule
+        is_reschedule_intent = bool(re.search(
+            r'\b(?:reschedule|change\s+(?:the\s+)?time|different\s+time|move\s+(?:the\s+)?(?:demo|meeting|walkthrough|call)|can\s+we\s+do\s+(?:another|a\s+different))\b',
+            lower
+        ))
+        if state.scheduled_demo and state.scheduled_demo.get("status") == "CONFIRMED" and not is_reschedule_intent:
+            return
 
-        extracted_time = self._extract_time(lower, state.transcript)
-        extracted_day = self._extract_day(lower, state.transcript)
+        # 7a. Exclude non-scheduling patterns (voice demo inquiries, current call references, greetings)
+        is_capability_query = bool(re.search(
+            r'\b(?:show|give|hear|see|try|test|do)\s+(?:me\s+)?(?:a\s+)?(?:quick\s+|live\s+)?(?:demo|demonstration)\b'
+            r'|\b(?:demo\s+of|demo\s+your|voice\s+demo|product\s+demo)\b'
+            r'|\b(?:can|could)\s+you\s+(?:demo|demonstrate)\b',
+            lower
+        ))
+        is_current_call_ref = bool(re.search(
+            r'\b(?:on|during|end|start|about|for|finish)\s+(?:this|the|our)\s+call\b'
+            r'|\b(?:call\s+latency|call\s+quality|phone\s+call|voice\s+call|this\s+call)\b'
+            r'|\bcan\s+you\s+hear\s+me\b'
+            r'|\bhow\s+does\s+this\s+call\s+work\b',
+            lower
+        ))
+        is_greeting = bool(re.search(
+            r'^\s*(?:hello|hi|hey|good\s+(?:morning|afternoon|evening)|howdy|greetings)[\s!.,?]*$',
+            lower
+        ))
 
-        is_demo_context = (
-            state.stage == DealStageEnum.DEMO_SCHEDULING or
-            any(k in state.next_best_action.lower() for k in ["demo", "calendar", "schedule", "walkthrough"])
-        )
+        # 7b. Explicit Scheduling Intent from Buyer
+        explicit_schedule_intent = bool(re.search(
+            r'\b(?:schedule|book|reserve|set\s*up|arrange|lock\s*in|organize)\s+(?:a\s+|the\s+|our\s+)?(?:demo|walkthrough|meeting|appointment|session|time\s*slot|call\s+with\s+(?:a|the|your)?\s*architect)\b'
+            r'|\b(?:book|schedule|reserve)\s+(?:some\s+)?(?:time|a\s+slot|a\s+call)\b'
+            r'|\b(?:send|email)\s+(?:me\s+)?(?:the\s+|a\s+)?(?:calendar\s*invite|calendar\s*link|meeting\s*link|invite)\b'
+            r'|\b(?:want|like)\s+to\s+(?:schedule|book|reserve|set\s*up)\s+(?:a\s+)?(?:demo|meeting|walkthrough|call)\b'
+            r'|\bcan\s+we\s+(?:schedule|book|reserve|set\s*up)\s+(?:a\s+)?(?:demo|meeting|walkthrough|call)\b',
+            lower
+        ))
 
-        is_scheduling_trigger = (
-            has_demo_word or
-            (extracted_day and extracted_time) or
-            (has_action_word and (extracted_day or extracted_time or has_duration)) or
-            (has_duration and (extracted_day or extracted_time)) or
-            (is_demo_context and (extracted_day or extracted_time or has_agreement or has_action_word))
-        )
+        # 7c. Check if previous agent turn proposed a slot and buyer is agreeing to it
+        agent_proposed_slot = False
+        if state.transcript:
+            for turn in reversed(state.transcript):
+                if turn.role in ["agent", "assistant"]:
+                    t_low = turn.content.lower()
+                    if any(w in t_low for w in ["schedule", "book", "walkthrough", "meet", "tomorrow", "calendar", "slot"]):
+                        day_check = self._extract_day(t_low)
+                        time_check = self._extract_time(t_low)
+                        if (day_check and time_check) or any(phrase in t_low for phrase in ["how about", "would you like to", "shall we", "does that work"]):
+                            agent_proposed_slot = True
+                    break
+
+        buyer_agreed_slot = bool(re.search(
+            r'\b(?:that\s+works|works\s+for\s+me|sounds\s+good|lock\s+it\s+in|let\'?s\s+do\s+(?:that|it|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d+\s*(?:am|pm)\s+works|perfect\s+let\'?s\s+do\s+it|yes\s+let\'?s\s+do\s+that|yes\s+please\s+book)\b',
+            lower
+        ))
+
+        # 7d. Buyer directly specifies day AND time with meeting intention
+        direct_day = self._extract_day(lower)
+        direct_time = self._extract_time(lower)
+        has_meeting_keyword = bool(re.search(r'\b(?:demo|walkthrough|meeting|appointment|slot|call)\b', lower))
+        buyer_provided_slot = bool(direct_day and direct_time and (has_meeting_keyword or explicit_schedule_intent))
+
+        is_scheduling_trigger = False
+        if not is_capability_query and not is_current_call_ref and not is_greeting:
+            if explicit_schedule_intent:
+                is_scheduling_trigger = True
+            elif agent_proposed_slot and buyer_agreed_slot:
+                is_scheduling_trigger = True
+            elif buyer_provided_slot:
+                is_scheduling_trigger = True
+            elif is_reschedule_intent:
+                is_scheduling_trigger = True
 
         if is_scheduling_trigger:
             duration = self._extract_duration(lower)
-            day = extracted_day or self._extract_day(lower, state.transcript) or "Tomorrow"
-            time_str = extracted_time or self._extract_time(lower, state.transcript) or "2:00 PM"
+            allow_agent = bool(agent_proposed_slot and buyer_agreed_slot)
+            day = direct_day or self._extract_day(lower, state.transcript, allow_agent_fallback=allow_agent) or "Tomorrow"
+            time_str = direct_time or self._extract_time(lower, state.transcript, allow_agent_fallback=allow_agent) or "2:00 PM"
 
             formatted_slot = f"{day} at {time_str} EST ({duration})"
 
@@ -280,14 +325,14 @@ class DealStateEngine:
                 description=f"Calendar demo locked in for {formatted_slot} with {email}."
             ))
 
-    def _extract_day(self, lower: str, transcript: Optional[List[ChatTurn]] = None) -> Optional[str]:
+    def _extract_day(self, lower: str, transcript: Optional[List[ChatTurn]] = None, allow_agent_fallback: bool = False) -> Optional[str]:
         m = re.search(r'\b((?:next|this|coming)?\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tomorrow|today|day after tomorrow)\b', lower)
         if m:
             return m.group(1).strip().title()
         m2 = re.search(r'\b((?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)\b', lower)
         if m2:
             return m2.group(1).strip().title()
-        if transcript:
+        if allow_agent_fallback and transcript:
             for turn in reversed(transcript):
                 if turn.role in ["agent", "assistant"]:
                     t_low = turn.content.lower()
@@ -296,7 +341,7 @@ class DealStateEngine:
                         return m3.group(1).strip().title()
         return None
 
-    def _extract_time(self, lower: str, transcript: Optional[List[ChatTurn]] = None) -> Optional[str]:
+    def _extract_time(self, lower: str, transcript: Optional[List[ChatTurn]] = None, allow_agent_fallback: bool = False) -> Optional[str]:
         hour_words = {
             "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
             "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12
@@ -319,7 +364,7 @@ class DealStateEngine:
             return f"{h}:00 {period}"
 
         # 3. "at/around X" e.g. "at 2", "around 2", "at two"
-        m = re.search(r'\b(?:at|around)\s+((?:1[0-2]|0?[1-9]|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve))(?!\s*(?:mins|minutes|min|hour|hours|users|seats|reps|percent))\b', lower)
+        m = re.search(r'\b(?:at|around)\s+((?:1[0-2]|0?[1-9]|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve))(?!\s*(?:mins|minutes|min|hour|hours|users|seats|reps|percent|k|thousand))\b', lower)
         if m:
             token = m.group(1).lower()
             h = hour_words.get(token) if token in hour_words else int(token)
@@ -342,19 +387,19 @@ class DealStateEngine:
             period = "PM" if h in [1, 2, 3, 4, 5, 6, 7] or any(p in lower for p in ["afternoon", "evening"]) else "AM"
             return f"{h}:00 {period}"
 
-        # 6. Keywords
-        if "morning" in lower:
+        # 6. Keywords with context (NEVER bare "morning" or "afternoon" which catches "Good morning"!)
+        if re.search(r'\b(?:in\s+the|tomorrow|this)\s+morning\b', lower):
             return "10:00 AM"
-        if "afternoon" in lower:
+        if re.search(r'\b(?:in\s+the|tomorrow|this)\s+afternoon\b', lower):
             return "2:00 PM"
-        if "evening" in lower:
+        if re.search(r'\b(?:in\s+the|tomorrow|this)\s+evening\b', lower):
             return "5:00 PM"
 
-        # 7. Check recent assistant turn
-        if transcript:
+        # 7. Check recent assistant turn only if allow_agent_fallback is True
+        if allow_agent_fallback and transcript:
             for turn in reversed(transcript):
                 if turn.role in ["agent", "assistant"]:
-                    t_val = self._extract_time(turn.content.lower(), None)
+                    t_val = self._extract_time(turn.content.lower(), None, allow_agent_fallback=False)
                     if t_val:
                         return t_val
 
@@ -376,74 +421,105 @@ class DealStateEngine:
     def check_agent_demo_confirmation(self, state: DealState, text: str):
         """
         If the agent verbally confirms a demo reservation, ensure scheduled_demo is locked in.
+        Strictly verify that:
+        1. scheduled_demo is not already booked.
+        2. Agent is explicitly confirming a booked reservation (not just describing features or proposing).
+        3. The buyer in recent conversation actually requested or confirmed a demo.
         """
+        if state.scheduled_demo and state.scheduled_demo.get("status") == "CONFIRMED":
+            return
+
         lower = text.lower()
-        if any(w in lower for w in ["reserved", "booked", "scheduled", "confirmed"]) and any(w in lower for w in ["demo", "walkthrough", "slot", "calendar", "call"]):
-            day = self._extract_day(lower, state.transcript) or "Tomorrow"
-            time_str = self._extract_time(lower, state.transcript) or "2:00 PM"
-            duration = self._extract_duration(lower)
-            formatted_slot = f"{day} at {time_str} EST ({duration})"
 
-            email = (
-                (state.contact_email.strip() if state.contact_email and "@" in state.contact_email else None) or
-                (state.crm_lead.contact_email.strip() if state.crm_lead and getattr(state.crm_lead, "contact_email", None) else None)
-            )
-            email_match = re.search(r'\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b', text)
-            if email_match:
-                email = email_match.group(1).strip()
-            if not email:
-                if state.crm_lead and getattr(state.crm_lead, "contact_name", None) and state.crm_lead.contact_name != "Prospect":
-                    contact_slug = state.crm_lead.contact_name.lower().replace(" ", ".")
-                    email = f"{contact_slug}@prospect.com"
-                else:
-                    email = "alex.rivera@nextgen.ai"
+        # Must be an explicit agent confirmation of a completed booking
+        agent_confirmed = bool(re.search(
+            r'\b(?:i\s+have|i\'ve|we\s+have|we\'ve)\s+(?:booked|scheduled|reserved|locked\s+in)\s+(?:a|the|our|your)?\s*(?:demo|walkthrough|meeting|appointment|call|session|slot)\b'
+            r'|\b(?:demo|walkthrough|meeting)\s+(?:is|has\s+been)\s+(?:locked\s+in|booked|scheduled|confirmed)\b'
+            r'|\bcalendar\s+(?:invite|invitation)\s+(?:has\s+been|is)\s+dispatched\b',
+            lower
+        ))
+        if not agent_confirmed:
+            return
 
-            meeting_id = f"mtg_{int(time.time()*1000)}"
-            prep = email_service.prepare_demo_confirmation(email, {
-                "time": formatted_slot,
-                "duration": duration,
-                "topic": "Lively Real-Time Voice AI Sales Deep-Dive",
-                "host": "Senior Solutions Architect",
-                "meeting_link": "https://meet.google.com/new",
-                "meeting_id": meeting_id
-            })
+        # Verification: Did the buyer actually ask for or agree to a demo?
+        buyer_agreed = False
+        if state.transcript:
+            for turn in reversed(state.transcript):
+                if turn.role == "buyer":
+                    b_low = turn.content.lower()
+                    if re.search(r'\b(schedule|book|reserve|set\s*up|lock\s*in|walkthrough|demo|meeting|that\s+works|works\s+for\s+me|sounds\s+good|yes\s+please|let\'?s\s+do\s+it)\b', b_low):
+                        buyer_agreed = True
+                        break
 
-            old_demo = state.scheduled_demo
-            demo_data = {
-                "meeting_id": meeting_id,
-                "status": "CONFIRMED",
-                "time": formatted_slot,
-                "email": email,
-                "duration": duration,
-                "topic": "Lively Real-Time Voice AI Sales Deep-Dive",
-                "host": "Senior Solutions Architect",
-                "meeting_link": "https://meet.google.com/new",
-                "google_calendar_link": prep["google_calendar_url"],
-                "booked_at": time.time(),
-                "message": f"Demo locked & confirmed for {formatted_slot}. Google Meet link & Calendar block dispatched to {email}."
-            }
-            state.scheduled_demo = demo_data
-            state.stage = DealStageEnum.DEMO_SCHEDULING
-            state.crm_lead.status = "Demo_Scheduled"
-            action_note = f"Demo booked: {formatted_slot} ({email})"
-            if action_note not in state.action_items:
-                state.action_items.append(action_note)
+        if not buyer_agreed:
+            logger.info("Agent mentioned booking confirmation but buyer never requested or agreed to a demo. Skipping false trigger.")
+            return
 
-            email_note = f"Invite dispatched: {email} (Google Meet + Calendar blocked)"
-            if email_note not in state.action_items:
-                state.action_items.append(email_note)
+        day = self._extract_day(lower, state.transcript, allow_agent_fallback=True) or "Tomorrow"
+        time_str = self._extract_time(lower, state.transcript, allow_agent_fallback=True) or "2:00 PM"
+        duration = self._extract_duration(lower)
+        formatted_slot = f"{day} at {time_str} EST ({duration})"
 
-            try:
-                email_service.send_demo_confirmation(email, demo_data)
-            except Exception as e_err:
-                logger.error(f"Failed to dispatch demo email invite: {e_err}")
+        email = (
+            (state.contact_email.strip() if state.contact_email and "@" in state.contact_email else None) or
+            (state.crm_lead.contact_email.strip() if state.crm_lead and getattr(state.crm_lead, "contact_email", None) else None)
+        )
+        email_match = re.search(r'\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b', text)
+        if email_match:
+            email = email_match.group(1).strip()
+        if not email:
+            if state.crm_lead and getattr(state.crm_lead, "contact_name", None) and state.crm_lead.contact_name != "Prospect":
+                contact_slug = state.crm_lead.contact_name.lower().replace(" ", ".")
+                email = f"{contact_slug}@prospect.com"
+            else:
+                email = "alex.rivera@nextgen.ai"
 
-            state.change_log.append(ChangeLogEntry(
-                field="scheduled_demo",
-                old_value=old_demo.get("time") if old_demo else None,
-                new_value=formatted_slot,
-                description=f"Calendar demo locked in for {formatted_slot} with {email}."
-            ))
+        meeting_id = f"mtg_{int(time.time()*1000)}"
+        prep = email_service.prepare_demo_confirmation(email, {
+            "time": formatted_slot,
+            "duration": duration,
+            "topic": "Lively Real-Time Voice AI Sales Deep-Dive",
+            "host": "Senior Solutions Architect",
+            "meeting_link": "https://meet.google.com/new",
+            "meeting_id": meeting_id
+        })
+
+        old_demo = state.scheduled_demo
+        demo_data = {
+            "meeting_id": meeting_id,
+            "status": "CONFIRMED",
+            "time": formatted_slot,
+            "email": email,
+            "duration": duration,
+            "topic": "Lively Real-Time Voice AI Sales Deep-Dive",
+            "host": "Senior Solutions Architect",
+            "meeting_link": "https://meet.google.com/new",
+            "google_calendar_link": prep["google_calendar_url"],
+            "booked_at": time.time(),
+            "message": f"Demo locked & confirmed for {formatted_slot}. Google Meet link & Calendar block dispatched to {email}."
+        }
+        state.scheduled_demo = demo_data
+        state.stage = DealStageEnum.DEMO_SCHEDULING
+        state.crm_lead.status = "Demo_Scheduled"
+        action_note = f"Demo booked: {formatted_slot} ({email})"
+        if action_note not in state.action_items:
+            state.action_items.append(action_note)
+
+        email_note = f"Invite dispatched: {email} (Google Meet + Calendar blocked)"
+        if email_note not in state.action_items:
+            state.action_items.append(email_note)
+
+        try:
+            email_service.send_demo_confirmation(email, demo_data)
+        except Exception as e_err:
+            logger.error(f"Failed to dispatch demo email invite: {e_err}")
+
+        state.change_log.append(ChangeLogEntry(
+            field="scheduled_demo",
+            old_value=old_demo.get("time") if old_demo else None,
+            new_value=formatted_slot,
+            description=f"Calendar demo locked in for {formatted_slot} with {email}."
+        ))
 
     def resolve_objection(self, channel_name: str, objection_id: str) -> Optional[DealState]:
         state = self.get_or_create(channel_name)
