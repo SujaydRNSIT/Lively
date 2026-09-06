@@ -20,6 +20,7 @@ import {
   fetchDealState,
   resolveObjection,
   setUserContact,
+  resetDealState,
 } from './services/api';
 import { DealState, AgoraConfig } from './types';
 
@@ -144,6 +145,16 @@ export const App: React.FC = () => {
 
   const handleToggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const handleResetSession = async () => {
+    try {
+      const fresh = await resetDealState(channelName);
+      setDealState(fresh || INITIAL_DEAL_STATE);
+    } catch (e) {
+      console.warn('Reset error, falling back to local initial state:', e);
+      setDealState(INITIAL_DEAL_STATE);
+    }
   };
 
   const voiceManagerRef = useRef<AgoraVoiceManager | null>(null);
@@ -371,7 +382,7 @@ export const App: React.FC = () => {
       {/* Main Dashboard Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Task 9.5: Prominent Outcome Banner */}
-        <OutcomeBanner dealState={dealState} />
+        <OutcomeBanner dealState={dealState} onReset={handleResetSession} />
 
         {/* Voice Call HUD and live automation orbit - rendered in Live Sales Cockpit and Scripted Demo Harness */}
         {(activeTab === 'cockpit' || activeTab === 'scenario') && (

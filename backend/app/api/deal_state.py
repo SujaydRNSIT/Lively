@@ -71,3 +71,15 @@ async def resolve_deal_objection(channel_name: str, req: ResolveObjectionRequest
             "data": updated.model_dump()
         })
     return {"status": "success", "data": updated.model_dump() if updated else {}}
+ 
+@router.post("/{channel_name}/reset")
+async def reset_channel_deal_state(channel_name: str):
+    """
+    Resets the Deal State for the specified channel to a clean initial state.
+    """
+    new_state = deal_state_engine.reset_state(channel_name)
+    await ws_manager.broadcast_state(channel_name, {
+        "type": "DEAL_STATE_UPDATE",
+        "data": new_state.model_dump()
+    })
+    return {"status": "success", "data": new_state.model_dump()}

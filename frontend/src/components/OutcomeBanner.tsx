@@ -1,9 +1,14 @@
 import React from 'react';
-import { ArrowUpRight, CheckCircle2, AlertOctagon } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, AlertOctagon, RotateCcw } from 'lucide-react';
 import { DealState } from '../types';
 import { CalendarEventCard } from './CalendarEventCard';
 
-export const OutcomeBanner: React.FC<{ dealState: DealState }> = ({ dealState }) => {
+interface OutcomeBannerProps {
+  dealState: DealState;
+  onReset?: () => void;
+}
+
+export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset }) => {
   const stage = (dealState.stage || '').toLowerCase();
   const booked = stage === 'demo_scheduling' || !!dealState.scheduled_demo;
   const escalated = stage === 'escalated';
@@ -37,18 +42,30 @@ export const OutcomeBanner: React.FC<{ dealState: DealState }> = ({ dealState })
           <p className="mt-1 text-sm text-[#4c4b46] dark:text-[#9aa0ad]">{detail}</p>
         </div>
 
-        {escalated && (
-          <a
-            href="https://meet.google.com/new"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#ef4444] text-white text-xs font-semibold shadow-xs transition-transform active:scale-95"
-          >
-            <AlertOctagon className="h-3.5 w-3.5" />
-            <span>Enter Transfer Desk</span>
-            <ArrowUpRight size={14} />
-          </a>
-        )}
+        <div className="flex items-center gap-2.5">
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#151926] text-xs font-medium text-[#4c4b46] dark:text-[#d1d5db] hover:bg-[#f3f2eb] dark:hover:bg-[#1e2436] transition cursor-pointer"
+            >
+              <RotateCcw size={13} className="text-[#6166cf]" />
+              <span>Start Fresh Call</span>
+            </button>
+          )}
+
+          {escalated && (
+            <a
+              href="https://meet.google.com/new"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#ef4444] text-white text-xs font-semibold shadow-xs transition-transform active:scale-95"
+            >
+              <AlertOctagon className="h-3.5 w-3.5" />
+              <span>Enter Transfer Desk</span>
+              <ArrowUpRight size={14} />
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Render Calendar UI when Demo is booked */}

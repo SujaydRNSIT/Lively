@@ -32,6 +32,14 @@ class DealStateEngine:
     def get_state(self, channel_name: str) -> Optional[DealState]:
         return self._states.get(channel_name)
 
+    def reset_state(self, channel_name: str) -> DealState:
+        new_state = DealState(
+            channel_name=channel_name,
+            session_id=f"sess_{channel_name}_{int(time.time())}"
+        )
+        self._states[channel_name] = new_state
+        return new_state
+
     def record_turn(
         self,
         channel_name: str,

@@ -98,6 +98,16 @@ export async function resolveObjection(channelName: string, objectionId: string)
   return json.data;
 }
 
+export async function resetDealState(channelName: string): Promise<DealState> {
+  const res = await fetch(`${API_BASE}/deal-state/${encodeURIComponent(channelName)}/reset`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  if (!res.ok) throw new Error('Failed to reset deal state');
+  const json = await res.json();
+  return json.data;
+}
+
 export async function setUserContact(
   channelName: string,
   email: string,
