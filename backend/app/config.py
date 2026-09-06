@@ -1,4 +1,6 @@
+import os
 from typing import Optional
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +18,16 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     BACKEND_PUBLIC_URL: str = "http://localhost:8000"
+
+    @model_validator(mode="after")
+    def resolve_backend_public_url(self) -> "Settings":
+        render_url = os.getenv("RENDER_EXTERNAL_URL")
+        # If BACKEND_PUBLIC_URL is localhost or empty, and we are running on Render, auto-use Render URL
+        if self.BACKEND_PUBLIC_URL in ("http://localhost:8000", "http://localhost:8000/", "", None) and render_url:
+            self.BACKEND_PUBLIC_URL = render_url.rstrip("/")
+        else:
+            self.BACKEND_PUBLIC_URL = (self.BACKEND_PUBLIC_URL or "").rstrip("/")
+        return self
 
     # Internal / Client Auth
     LIVELY_API_KEY: str = "lively-session-secret-key-2026"
