@@ -75,13 +75,22 @@ export class AgoraVoiceManager {
       await this.client.join(appId, channelName, token || null, uid);
       console.log('[AgoraRTC] Successfully joined channel. Creating microphone audio track...');
 
-      // Create and publish local microphone
-      this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        encoderConfig: 'high_quality_stereo',
-        AEC: true, // Acoustic Echo Cancellation
-        ANS: true, // Automatic Noise Suppression
-        AGC: true, // Automatic Gain Control
-      });
+      // Create and publish local microphone with resilient fallback
+      try {
+        this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          encoderConfig: 'speech_standard',
+          AEC: true,
+          ANS: true,
+          AGC: true,
+        });
+      } catch (trackError) {
+        console.warn('[AgoraRTC] Standard encoderConfig failed, falling back to default mic constraints:', trackError);
+        this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          AEC: true,
+          ANS: true,
+          AGC: true,
+        });
+      }
 
       console.log('[AgoraRTC] Microphone audio track created. Publishing track...');
       await this.client.publish([this.localAudioTrack]);

@@ -12,6 +12,7 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
 import { EmailCaptureModal } from './components/EmailCaptureModal';
 import { AgoraVoiceManager } from './services/agoraRtc';
+import { BrowserVoiceSession } from './services/browserVoice';
 import {
   fetchAgoraConfig,
   generateRtcToken,
@@ -158,6 +159,7 @@ export const App: React.FC = () => {
   };
 
   const voiceManagerRef = useRef<AgoraVoiceManager | null>(null);
+  const browserVoiceRef = useRef<BrowserVoiceSession | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Initialize Agora voice manager
@@ -186,6 +188,7 @@ export const App: React.FC = () => {
 
     return () => {
       voiceManagerRef.current?.leaveChannel();
+      browserVoiceRef.current?.stop();
       wsRef.current?.close();
     };
   }, []);
@@ -312,6 +315,10 @@ export const App: React.FC = () => {
   const handleToggleConnect = async () => {
     if (isConnected) {
       await voiceManagerRef.current?.leaveChannel();
+      if (browserVoiceRef.current) {
+        browserVoiceRef.current.stop();
+        browserVoiceRef.current = null;
+      }
       if (agentSessionId) {
         stopConversationalAgent(agentSessionId, channelName).catch(console.error);
         setAgentSessionId(null);
@@ -326,23 +333,46 @@ export const App: React.FC = () => {
       const userUid = Math.floor(1000 + Math.random() * 9000);
       const { token, app_id } = await generateRtcToken(channelName, userUid);
 
-      // Start agent first — this is what triggers LLM callbacks
+      // Start agent session
       const agentRes = await startConversationalAgent(channelName, userUid);
       if (agentRes.agent_id) {
         setAgentSessionId(agentRes.agent_id);
       }
 
-      // Join voice channel (non-blocking — agent works even if local join fails)
+      // Join voice channel with local microphone
       if (app_id && app_id !== 'demo_app_id') {
-        voiceManagerRef.current?.joinChannel(app_id, channelName, token, userUid).catch((e) => {
-          console.warn('Voice join failed (agent still active):', e);
-        });
+        try {
+          await voiceManagerRef.current?.joinChannel(app_id, channelName, token, userUid);
+        } catch (voiceErr) {
+          console.warn('[AgoraRTC] Local microphone join warning:', voiceErr);
+        }
+      }
+
+      // If cloud agent is in simulation/mock mode, activate the browser voice fallback
+      if (agentRes.mock) {
+        console.log('[App] Cloud agent is in simulation mode. Activating browser voice fallback...');
+        const browserVoice = new BrowserVoiceSession(
+          channelName,
+          (status) => setAgentStatus(status),
+          (role, text) => {
+            setDealState((prev) => ({
+              ...prev,
+              transcript: [
+                ...prev.transcript,
+                { role, content: text, timestamp: Date.now() / 1000 }
+              ]
+            }));
+          }
+        );
+        browserVoice.start();
+        browserVoiceRef.current = browserVoice;
       }
 
       setIsConnected(true);
     } catch (err: any) {
       console.error('Agent start failed:', err);
-      setIsConnected(true);
+      alert('Unable to connect voice: Please make sure your microphone is connected and permissions are allowed in your browser.');
+      setIsConnected(false);
     } finally {
       setIsConnecting(false);
     }
