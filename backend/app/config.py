@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # Groq Settings (Primary low-latency LLM)
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "qwen/qwen3.8-27b"
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
 
     # NVIDIA NIM Settings (Secondary / Reasoning / Fallback)
     NVIDIA_NIM_API_KEY: str = ""
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     PINECONE_NAMESPACE: str = "knowledge-base"
 
     # Voice Turn Pacing (Pause in seconds after user finishes speaking before model responds)
-    AGENT_RESPONSE_DELAY_SECONDS: float = 3.0
+    AGENT_RESPONSE_DELAY_SECONDS: float = 0.0
 
     # SMTP / Email Delivery Settings
     SMTP_HOST: Optional[str] = "smtp.gmail.com"

@@ -57,18 +57,19 @@ async def handle_chat_completion(
         logger.info(f"User utterance extracted: '{user_utterance}'")
         deal_state_engine.record_turn(channel_name, role="buyer", text=user_utterance)
         state_snapshot = deal_state.model_dump()
-        await ws_manager.broadcast_state(channel_name, {
+        # Fire-and-forget: don't block the hot path before LLM streaming
+        asyncio.create_task(ws_manager.broadcast_state(channel_name, {
             "type": "TRANSCRIPT_TURN",
             "data": {
                 "role": "buyer",
                 "text": user_utterance,
                 "deal_state": state_snapshot
             }
-        })
-        await ws_manager.broadcast_state(channel_name, {
+        }))
+        asyncio.create_task(ws_manager.broadcast_state(channel_name, {
             "type": "DEAL_STATE_UPDATE",
             "data": state_snapshot
-        })
+        }))
 
     # Prepare normalized messages for LLM
     raw_messages = [
@@ -76,10 +77,10 @@ async def handle_chat_completion(
         for m in body.messages
     ]
 
-    await ws_manager.broadcast_state(channel_name, {
+    asyncio.create_task(ws_manager.broadcast_state(channel_name, {
         "type": "AGENT_STATUS",
         "data": {"status": "thinking"}
-    })
+    }))
 
     async def token_generator():
         if settings.AGENT_RESPONSE_DELAY_SECONDS > 0:

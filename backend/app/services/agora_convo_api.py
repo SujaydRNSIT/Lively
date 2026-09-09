@@ -15,6 +15,12 @@ class AgoraConvoAIService:
         self.app_cert = settings.AGORA_APP_CERTIFICATE
         self.rest_key = settings.AGORA_REST_KEY
         self.rest_secret = settings.AGORA_REST_SECRET
+        # Shared connection-pooled HTTP client — avoids TCP+TLS handshake per request
+        self._http_client = httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            http2=True
+        )
 
     def _get_headers(self) -> Dict[str, str]:
         if not self.rest_key or not self.rest_secret:
@@ -73,7 +79,10 @@ class AgoraConvoAIService:
                         "url": "wss://api.minimax.io/ws/v1/t2a_v2",
                         "model": "speech-2.6-turbo",
                         "voice_setting": {
-                            "voice_id": "English_captivating_female1"
+                            "voice_id": "English_captivating_female1",
+                            "speed": 1.05,
+                            "pitch": 0,
+                            "emotion": "cheerful"
                         }
                     }
                 },
@@ -87,7 +96,15 @@ class AgoraConvoAIService:
                     }
                 },
                 "turn_detection": {
-                    "mode": "default"
+                    "mode": "server_vad",
+                    "silence_duration_ms": 600,
+                    "prefix_padding_ms": 300,
+                    "interrupt_sensitivity": 0.7
+                },
+                "advanced_features": {
+                    "enable_aec": True,
+                    "enable_ns": True,
+                    "enable_agc": True
                 }
             }
         }
@@ -105,43 +122,42 @@ class AgoraConvoAIService:
 
         endpoint = f"{self.BASE_URL}/{self.app_id}/join"
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                res = await client.post(endpoint, json=payload, headers=self._get_headers())
-                logger.info(f"Agora v2 join response: {res.status_code} {res.text[:500]}")
-                if res.status_code in (200, 201):
-                    data = res.json()
-                    data["channel_name"] = channel_name
-                    data["agent_rtc_uid"] = agent_rtc_uid
-                    return data
-                elif res.status_code == 409:
-                    try:
-                        err_data = res.json()
-                        existing_agent = err_data.get("agent_id")
-                        if existing_agent:
-                            logger.info(f"Stopping conflicting Agora agent {existing_agent} and retrying join...")
-                            await self.stop_agent(existing_agent)
-                            import asyncio
-                            await asyncio.sleep(0.5)
-                            payload["name"] = f"Lively_{channel_name}_{int(time.time())}_retry"
-                            retry_res = await client.post(endpoint, json=payload, headers=self._get_headers())
-                            if retry_res.status_code in (200, 201):
-                                data = retry_res.json()
-                                data["channel_name"] = channel_name
-                                data["agent_rtc_uid"] = agent_rtc_uid
-                                return data
-                    except Exception as retry_err:
-                        logger.warning(f"Retry after 409 failed: {retry_err}")
+            res = await self._http_client.post(endpoint, json=payload, headers=self._get_headers())
+            logger.info(f"Agora v2 join response: {res.status_code} {res.text[:500]}")
+            if res.status_code in (200, 201):
+                data = res.json()
+                data["channel_name"] = channel_name
+                data["agent_rtc_uid"] = agent_rtc_uid
+                return data
+            elif res.status_code == 409:
+                try:
+                    err_data = res.json()
+                    existing_agent = err_data.get("agent_id")
+                    if existing_agent:
+                        logger.info(f"Stopping conflicting Agora agent {existing_agent} and retrying join...")
+                        await self.stop_agent(existing_agent)
+                        import asyncio
+                        await asyncio.sleep(0.5)
+                        payload["name"] = f"Lively_{channel_name}_{int(time.time())}_retry"
+                        retry_res = await self._http_client.post(endpoint, json=payload, headers=self._get_headers())
+                        if retry_res.status_code in (200, 201):
+                            data = retry_res.json()
+                            data["channel_name"] = channel_name
+                            data["agent_rtc_uid"] = agent_rtc_uid
+                            return data
+                except Exception as retry_err:
+                    logger.warning(f"Retry after 409 failed: {retry_err}")
 
-                logger.warning(f"Agora Start Agent failed ({res.status_code}): {res.text[:300]}. Falling back to simulation.")
-                return {
-                    "agent_id": f"agent_sess_{channel_name}_{int(customer_uid)}",
-                    "status": "RUNNING",
-                    "channel_name": channel_name,
-                    "agent_rtc_uid": agent_rtc_uid,
-                    "customer_uid": customer_uid,
-                    "api_code": res.status_code,
-                    "mock": True
-                }
+            logger.warning(f"Agora Start Agent failed ({res.status_code}): {res.text[:300]}. Falling back to simulation.")
+            return {
+                "agent_id": f"agent_sess_{channel_name}_{int(customer_uid)}",
+                "status": "RUNNING",
+                "channel_name": channel_name,
+                "agent_rtc_uid": agent_rtc_uid,
+                "customer_uid": customer_uid,
+                "api_code": res.status_code,
+                "mock": True
+            }
         except Exception as e:
             logger.exception(f"Agora Convo AI start agent error: {e}")
             return {
@@ -160,9 +176,8 @@ class AgoraConvoAIService:
 
         endpoint = f"{self.BASE_URL}/{self.app_id}/agents/{agent_id}/leave"
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.post(endpoint, headers=self._get_headers())
-                return res.json() if res.status_code == 200 else {"agent_id": agent_id, "status": "STOPPED", "code": res.status_code}
+            res = await self._http_client.post(endpoint, headers=self._get_headers())
+            return res.json() if res.status_code == 200 else {"agent_id": agent_id, "status": "STOPPED", "code": res.status_code}
         except Exception as e:
             return {"agent_id": agent_id, "status": "STOPPED", "error": str(e)}
 
@@ -172,9 +187,8 @@ class AgoraConvoAIService:
 
         endpoint = f"{self.BASE_URL}/{self.app_id}/agents/{agent_id}"
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.get(endpoint, headers=self._get_headers())
-                return res.json() if res.status_code == 200 else {"agent_id": agent_id, "status": "UNKNOWN", "code": res.status_code}
+            res = await self._http_client.get(endpoint, headers=self._get_headers())
+            return res.json() if res.status_code == 200 else {"agent_id": agent_id, "status": "UNKNOWN", "code": res.status_code}
         except Exception as e:
             return {"agent_id": agent_id, "status": "UNKNOWN", "error": str(e)}
 

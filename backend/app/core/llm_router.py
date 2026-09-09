@@ -247,8 +247,25 @@ class LLMRouter:
 
         stream_success = False
 
-        # Attempt 1: Primary provider — Groq LPU (low-latency voice turns: sub-300ms TTFT)
-        if self.groq_client:
+        # Smart routing: proactively route complex enterprise turns to NVIDIA NIM
+        use_nvidia_primary = self.should_route_to_nvidia(latest_user_msg, deal_state)
+
+        if use_nvidia_primary and self.nvidia_client:
+            # Attempt 1 (complex turn): NVIDIA NIM for higher reasoning quality
+            try:
+                selected_model = f"nvidia:{settings.NVIDIA_NIM_MODEL}"
+                logger.info(f"Smart-routing complex turn to NVIDIA NIM: {selected_model}")
+                async for chunk in self._stream_nvidia_client(augmented_messages, channel_name):
+                    if not ttft_recorded:
+                        first_token_time = time.time()
+                        ttft_recorded = True
+                    yield chunk
+                stream_success = True
+            except Exception as e:
+                logger.warning(f"NVIDIA NIM smart-route failed ({e}). Falling back to Groq...")
+
+        # Attempt: Groq LPU (low-latency voice turns: sub-300ms TTFT)
+        if not stream_success and self.groq_client:
             try:
                 selected_model = f"groq:{settings.GROQ_MODEL}"
                 logger.info(f"Routing turn to Groq LPU (low-latency): {selected_model}")
@@ -261,8 +278,8 @@ class LLMRouter:
             except Exception as e:
                 logger.warning(f"Groq turn failed ({e}). Falling back...")
 
-        # Attempt 2: Secondary provider — NVIDIA NIM
-        if not stream_success and self.nvidia_client:
+        # Fallback: NVIDIA NIM (if not already tried)
+        if not stream_success and self.nvidia_client and not use_nvidia_primary:
             try:
                 selected_model = f"nvidia:{settings.NVIDIA_NIM_MODEL}"
                 logger.info(f"Attempting fallback to NVIDIA NIM: {selected_model}")
@@ -317,8 +334,8 @@ class LLMRouter:
             model=model_name,
             messages=messages,
             stream=True,
-            temperature=0.6,
-            max_tokens=350
+            temperature=0.5,
+            max_tokens=180
         )
         think_state: dict = {}
         async for chunk in response:
@@ -343,8 +360,8 @@ class LLMRouter:
             model=model_name,
             messages=messages,
             stream=True,
-            temperature=0.6,
-            max_tokens=350
+            temperature=0.5,
+            max_tokens=230
         )
         think_state: dict = {}
         async for chunk in response:
