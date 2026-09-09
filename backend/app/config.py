@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # NVIDIA NIM Settings (Secondary / Reasoning / Fallback)
     NVIDIA_NIM_API_KEY: str = ""
     NVIDIA_NIM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
-    NVIDIA_NIM_MODEL: str = "meta/llama-3.1-70b-instruct"
+    NVIDIA_NIM_MODEL: str = "meta/llama-3.2-11b-vision-instruct"
 
     # Database & Cache Settings
     DATABASE_URL: Optional[str] = None

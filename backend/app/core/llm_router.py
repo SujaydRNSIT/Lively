@@ -198,6 +198,24 @@ class LLMRouter:
             return True
         return False
 
+    def is_objection_or_complex_turn(self, user_msg: str, deal_state: DealState) -> bool:
+        """
+        Identify turns requiring deeper reasoning (e.g. customer objections, price resistance, architectural scrutiny).
+        Normal conversational turns ("Hi, I'm just looking around") get instant zero-thinking responses.
+        """
+        lower = user_msg.lower()
+        objection_triggers = [
+            "expensive", "too much", "cost too", "price", "budget", "pricing",
+            "competitor", "openai", "twilio", "vapi", "bland", "why should",
+            "security", "hipaa", "soc2", "compliance", "not sure", "skeptical",
+            "hard to", "difficult", "switch", "replace", "architecture"
+        ]
+        if any(k in lower for k in objection_triggers):
+            return True
+        if deal_state and len(deal_state.active_objections) > 0:
+            return True
+        return self.should_route_to_nvidia(user_msg, deal_state)
+
     def construct_system_prompt(self, deal_state: DealState, latest_user_msg: str) -> str:
         rag_context = decision_engine.retrieve_context(latest_user_msg)
         objs_text = ", ".join([o.category for o in deal_state.active_objections]) if deal_state.active_objections else "None"
@@ -239,11 +257,30 @@ class LLMRouter:
                 latest_user_msg = m.get("content", "")
                 break
 
+        # Dynamic turn parameters: fast zero-thinking for normal turns, deeper reasoning for objections
+        is_objection = self.is_objection_or_complex_turn(latest_user_msg, deal_state)
+        if is_objection:
+            turn_temp = 0.6
+            turn_top_p = 0.9
+            turn_max_tokens = 250
+            allow_thinking = True
+        else:
+            turn_temp = 0.6
+            turn_top_p = 0.9
+            turn_max_tokens = 150
+            allow_thinking = False
+
         system_prompt = self.construct_system_prompt(deal_state, latest_user_msg)
         augmented_messages = [{"role": "system", "content": system_prompt}]
         for m in messages:
             if m.get("role") != "system":
                 augmented_messages.append(m)
+
+        if not allow_thinking:
+            augmented_messages.append({
+                "role": "system",
+                "content": "DIRECT RESPONSE MODE: This is a casual conversational turn. Respond immediately in 1 to 2 direct conversational sentences with zero internal monologue or thinking tags."
+            })
 
         stream_success = False
 
@@ -255,7 +292,9 @@ class LLMRouter:
             try:
                 selected_model = f"nvidia:{settings.NVIDIA_NIM_MODEL}"
                 logger.info(f"Smart-routing complex turn to NVIDIA NIM: {selected_model}")
-                async for chunk in self._stream_nvidia_client(augmented_messages, channel_name):
+                async for chunk in self._stream_nvidia_client(
+                    augmented_messages, channel_name, temperature=turn_temp, top_p=turn_top_p, max_tokens=turn_max_tokens
+                ):
                     if not ttft_recorded:
                         first_token_time = time.time()
                         ttft_recorded = True
@@ -269,7 +308,9 @@ class LLMRouter:
             try:
                 selected_model = f"groq:{settings.GROQ_MODEL}"
                 logger.info(f"Routing turn to Groq LPU (low-latency): {selected_model}")
-                async for chunk in self._stream_groq_client(augmented_messages, channel_name):
+                async for chunk in self._stream_groq_client(
+                    augmented_messages, channel_name, temperature=turn_temp, top_p=turn_top_p, max_tokens=turn_max_tokens, allow_thinking=allow_thinking
+                ):
                     if not ttft_recorded:
                         first_token_time = time.time()
                         ttft_recorded = True
@@ -283,14 +324,16 @@ class LLMRouter:
             try:
                 selected_model = f"nvidia:{settings.NVIDIA_NIM_MODEL}"
                 logger.info(f"Attempting fallback to NVIDIA NIM: {selected_model}")
-                async for chunk in self._stream_nvidia_client(augmented_messages, channel_name):
+                async for chunk in self._stream_nvidia_client(
+                    augmented_messages, channel_name, temperature=turn_temp, top_p=turn_top_p, max_tokens=turn_max_tokens
+                ):
                     if not ttft_recorded:
                         first_token_time = time.time()
                         ttft_recorded = True
                     yield chunk
                 stream_success = True
             except Exception as e:
-                logger.warning(f"NVIDIA NIM failed ({e}). Falling back to local brain...")
+                logger.warning(f"NVIDIA NIM fallback failed ({e}). Falling back to local brain...")
 
         # Attempt 3: Built-in sales brain fallback
         if not stream_success:
@@ -323,20 +366,38 @@ class LLMRouter:
         }))
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=0.1, min=0.1, max=0.5), reraise=True)
-    async def _stream_groq_client(self, messages: List[Dict[str, str]], channel_name: str) -> AsyncGenerator[str, None]:
+    async def _stream_groq_client(
+        self,
+        messages: List[Dict[str, str]],
+        channel_name: str,
+        temperature: float = 0.6,
+        top_p: float = 0.9,
+        max_tokens: int = 150,
+        allow_thinking: bool = False
+    ) -> AsyncGenerator[str, None]:
         chunk_id = f"chatcmpl-{channel_name}-{int(time.time()*1000)}"
         model_name = settings.GROQ_MODEL
 
         # First chunk: set assistant role for Agora engine
         yield make_role_chunk(chunk_id, model_name)
 
-        response = await self.groq_client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            stream=True,
-            temperature=0.6,
-            max_tokens=350
-        )
+        params: Dict[str, Any] = {
+            "model": model_name,
+            "messages": messages,
+            "stream": True,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens,
+        }
+        if not allow_thinking:
+            params["extra_body"] = {"thinking": {"type": "disabled"}}
+
+        try:
+            response = await self.groq_client.chat.completions.create(**params)
+        except Exception:
+            params.pop("extra_body", None)
+            response = await self.groq_client.chat.completions.create(**params)
+
         think_state: dict = {}
         async for chunk in response:
             raw = chunk.choices[0].delta.content if chunk.choices else None
@@ -350,7 +411,14 @@ class LLMRouter:
         yield "data: [DONE]\n\n"
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=0.1, min=0.1, max=0.5), reraise=True)
-    async def _stream_nvidia_client(self, messages: List[Dict[str, str]], channel_name: str) -> AsyncGenerator[str, None]:
+    async def _stream_nvidia_client(
+        self,
+        messages: List[Dict[str, str]],
+        channel_name: str,
+        temperature: float = 0.6,
+        top_p: float = 0.9,
+        max_tokens: int = 150
+    ) -> AsyncGenerator[str, None]:
         chunk_id = f"chatcmpl-{channel_name}-{int(time.time()*1000)}"
         model_name = settings.NVIDIA_NIM_MODEL
 
@@ -360,8 +428,9 @@ class LLMRouter:
             model=model_name,
             messages=messages,
             stream=True,
-            temperature=0.6,
-            max_tokens=350
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens
         )
         think_state: dict = {}
         async for chunk in response:
@@ -384,53 +453,51 @@ class LLMRouter:
         company_ref = f" at {deal_state.company}" if deal_state.company and deal_state.company != "Prospective Client" else ""
         users_ref = f"for your team of {deal_state.users}" if deal_state.users and deal_state.users > 1 else "for your team"
 
-        # 1. Greetings & Pleasantries
-        if any(w in lower for w in ["hello", "hi there", "hey", "good morning", "good afternoon"]) and len(lower.split()) <= 4:
-            text = f"Hi there! Great to meet you{company_ref}. I'm Lively, your voice AI sales representative. How's your day going?"
+        # 1. Casual browsing / Openers
+        if any(w in lower for w in ["looking around", "just looking", "browsing", "checking it out"]):
+            text = "Sure. What are you mainly trying to improve right now — sales, customer follow-up, or something else?"
+        elif any(w in lower for w in ["tell me more", "what do you offer", "tell me about your product"]):
+            text = "Sure. What are you mainly trying to improve right now — sales, customer follow-up, or something else?"
+        elif any(w in lower for w in ["hello", "hi there", "hey", "hi"]) and len(lower.split()) <= 4:
+            text = "Hey! Great to meet you. What are you mainly looking to improve with voice AI today?"
         elif any(w in lower for w in ["how are you", "how's it going", "how are you doing"]):
-            text = "I'm doing fantastic, thank you for asking! I'd love to learn about what you're building. What brings you to Lively today?"
+            text = "Doing well, thanks! What brings you by today — exploring voice agents for sales, support, or something else?"
         elif any(w in lower for w in ["who are you", "what is lively", "what do you do"]):
             text = (
-                "I'm Lively, a real-time voice sales agent powered by Agora's Conversational AI Engine. "
-                "I run live qualification, answer product questions with instant barge-in, and book demos directly to your calendar."
+                "I'm Lively. We give teams real-time voice agents that sound genuinely human, handle customer interruptions naturally, and connect in under two hundred milliseconds."
             )
-        # 2. Pricing & Plans
-        elif any(w in lower for w in ["price", "cost", "how much", "pricing", "expensive", "tier", "plan"]):
+        # 2. Objections & Pricing
+        elif any(w in lower for w in ["expensive", "too much", "cost too much"]):
             text = (
-                f"We keep our pricing very straightforward {users_ref}. Our Starter plan is one ninety-nine dollars a month for two thousand voice minutes, "
-                "and our Growth plan is six ninety-nine for ten thousand minutes with automated CRM sync. Teams usually cut their voice infrastructure costs by forty to sixty percent."
+                f"Totally understand that concern. Most teams find they actually save forty to sixty percent {users_ref} because you only pay for minutes used rather than full-time seats. What kind of call volume are you planning for?"
+            )
+        elif any(w in lower for w in ["price", "cost", "how much", "pricing", "tier", "plan"]):
+            text = (
+                f"Our Starter plan is one ninety-nine dollars a month for two thousand minutes, and Growth is six ninety-nine for ten thousand minutes. Does that pricing structure align with your budget?"
             )
         # 3. Competitor Battlecards
         elif any(w in lower for w in ["openai", "realtime", "gpt-4o", "gpt4o"]):
             text = (
-                "Great question. Unlike OpenAI Realtime which locks you into GPT-4o voice and public WebSockets, "
-                "Agora provides global telecom-grade SD-RTN routing, and our custom brain lets you use Groq for sub-two-hundred millisecond speed or sovereign models."
+                "OpenAI Realtime is great, but Agora provides dedicated telecom-grade global routing with native echo cancellation, and we let you plug in any LLM brain with zero lock-in."
             )
         elif any(w in lower for w in ["twilio", "vapi", "bland", "retell", "sip"]):
             text = (
-                "The biggest difference is latency and audio fidelity. Traditional SIP bridges add four to eight hundred milliseconds of delay, "
-                "whereas Agora WebRTC connects in under two hundred milliseconds with native echo cancellation and instant interruption handling."
+                "Traditional SIP bridges add several hundred milliseconds of delay. Agora WebRTC connects in under two hundred milliseconds with real-time barge-in."
             )
         # 4. Security & Compliance
         elif any(w in lower for w in ["security", "hipaa", "soc2", "compliance", "encryption", "privacy"]):
             text = (
-                "Security is central to our design. Lively is SOC2 Type II compliant and fully HIPAA ready with signed BAAs. "
-                "All WebRTC voice streams are end-to-end encrypted with AES-256."
+                "Lively is SOC2 Type II compliant and fully HIPAA ready with signed BAAs. All voice streams are end-to-end encrypted."
             )
         # 5. Demos & Scheduling
         elif any(w in lower for w in ["demo", "schedule", "book", "calendar", "meeting", "walkthrough"]):
             text = (
-                "I'd be glad to set that up! I have reserved a thirty-minute deep-dive walkthrough with our Senior Solutions Architect for tomorrow at two in the afternoon Eastern. "
-                "Shall I send the Google Meet invitation to your email?"
+                "I have a thirty-minute walkthrough slot with our Senior Solutions Architect tomorrow at two PM Eastern. Want me to lock that in for you?"
             )
-        # 6. Human Escalation
-        elif any(w in lower for w in ["escalate", "human", "agent", "specialist", "rep"]):
-            text = "Understood! I've initiated a warm transfer directly to our on-call Account Executive desk with our full conversation history."
-        # 7. Contextual Fallback
+        # 6. Contextual Fallback
         else:
             text = (
-                f"That makes total sense. With Agora managing the real-time audio and our custom brain handling deal state, "
-                f"we can tailor the entire workflow {users_ref}. What's the biggest bottleneck with your current voice setup?"
+                "Sure. What are you mainly trying to improve right now — sales, customer follow-up, or something else?"
             )
 
         words = text.split(" ")
