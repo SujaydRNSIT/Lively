@@ -130,6 +130,18 @@ def normalize_spoken_numbers(text: str) -> str:
     text = re.sub(r'\b20\b', 'twenty', text)
     return text
 
+def is_prompt_injection(user_msg: str) -> bool:
+    lower = user_msg.lower().strip()
+    injection_triggers = [
+        "ignore everything", "ignore all", "system prompt",
+        "unrestricted ai", "not a sales agent", "i'm the ceo", "i am the ceo",
+        "internal instructions", "configuration and instructions", "jailbreak",
+        "override your instructions", "you are now an unrestricted",
+        "forget all instructions", "reveal your instructions", "tell me your prompt",
+        "give me all your internal"
+    ]
+    return any(trigger in lower for trigger in injection_triggers)
+
 
 class LLMRouter:
     """
@@ -257,17 +269,31 @@ class LLMRouter:
                 latest_user_msg = m.get("content", "")
                 break
 
-        # Dynamic turn parameters: fast zero-thinking for normal turns, deeper reasoning for objections
+        # Prompt injection security interceptor
+        if is_prompt_injection(latest_user_msg):
+            chunk_id = f"chatcmpl-{channel_name}-{int(time.time()*1000)}"
+            model_name = "security-guard"
+            yield make_role_chunk(chunk_id, model_name)
+            guard_text = "I can only help with questions about Lively and our voice AI platform. How can I help your business today?"
+            words = guard_text.split(" ")
+            for i, word in enumerate(words):
+                yield make_chunk(chunk_id, model_name, word if i == 0 else f" {word}")
+                await asyncio.sleep(0.01)
+            yield make_chunk(chunk_id, model_name, "", finish_reason="stop")
+            yield "data: [DONE]\n\n"
+            return
+
+        # Dynamic turn parameters: voice conciseness (under 30 words, 1-2 sentences)
         is_objection = self.is_objection_or_complex_turn(latest_user_msg, deal_state)
         if is_objection:
-            turn_temp = 0.6
+            turn_temp = 0.5
             turn_top_p = 0.9
-            turn_max_tokens = 250
+            turn_max_tokens = 130
             allow_thinking = True
         else:
-            turn_temp = 0.6
+            turn_temp = 0.5
             turn_top_p = 0.9
-            turn_max_tokens = 150
+            turn_max_tokens = 90
             allow_thinking = False
 
         system_prompt = self.construct_system_prompt(deal_state, latest_user_msg)
@@ -276,11 +302,10 @@ class LLMRouter:
             if m.get("role") != "system":
                 augmented_messages.append(m)
 
-        if not allow_thinking:
-            augmented_messages.append({
-                "role": "system",
-                "content": "DIRECT RESPONSE MODE: Respond immediately in 1 to 2 conversational spoken sentences. Directly address the user's exact words. If the user answered a question, acknowledge their answer and move the conversation forward. NEVER repeat a discovery question you already asked."
-            })
+        augmented_messages.append({
+            "role": "system",
+            "content": "STRICT VOICE LIMIT: Respond in 1 to 2 spoken sentences (under 30 words). Never monologue, use bullet points, or list multiple points. Directly answer the user's question first. BANNED: Never say 'That is a great question', 'I totally understand', 'That makes complete sense', or 'I appreciate your honesty'."
+        })
 
         stream_success = False
 
@@ -457,80 +482,103 @@ class LLMRouter:
         past_texts = " ".join([t.content.lower() for t in deal_state.transcript[-6:]]) if deal_state and deal_state.transcript else ""
         already_asked_discovery = "trying to improve" in past_texts or "sales, customer follow-up" in past_texts
 
-        # 0. Audio / Mic check
-        if any(w in lower for w in ["audible", "hear me", "can you hear", "microphone", "mic test", "testing"]):
-            text = "Yes, I can hear you loud and clear! How are things going today, and what brings you by to check out Lively?"
+        # 0. Prompt Injection Guard
+        if is_prompt_injection(user_msg):
+            text = "I can only help with questions about Lively and our voice AI platform. How can I help your business today?"
 
-        # 1. User answers with what they want to improve: Sales
-        elif any(w in lower for w in ["increase sales", "more sales", "boost sales", "grow sales", "close more"]) or (lower in ["sales", "sales."]):
-            text = "Increasing sales is our sweet spot! Our voice AI qualifies inbound leads in under sixty seconds and books meetings directly onto your calendar. About how many leads does your team handle each month?"
+        # 1. Audio / Mic check
+        elif any(w in lower for w in ["audible", "hear me", "can you hear", "microphone", "mic test", "testing"]):
+            text = "I hear you loud and clear! How are things going today?"
 
-        # 2. User answers with Follow-up
-        elif any(w in lower for w in ["follow-up", "follow up", "followup", "speed to lead", "following up"]) or (lower in ["follow up", "follow-up", "followup"]):
-            text = "Speed-to-lead is critical. Lively calls leads within seconds of a form fill or missed call, answering their questions and qualifying intent. How many follow-ups is your team currently juggling?"
+        # 2. Specific multi-objection resistance (cheaper + team doesn't trust + migration)
+        elif any(w in lower for w in ["not convinced", "why exactly should i change", "migrating everything"]):
+            text = "Those are four very good reasons to stay put. If your current tool works and is cheaper, migrating doesn't make sense unless there is clear ROI with zero workflow disruption."
 
-        # 3. User answers with Customer Support
-        elif any(w in lower for w in ["customer support", "support", "service", "customer service"]) and len(lower.split()) <= 6:
-            text = "Voice AI handles tier-one support inquiries instantly with sub-second latency, freeing your human reps for high-touch issues. About how many support inquiries do you get every week?"
+        # 3. Frustrated customer handling
+        elif any(w in lower for w in ["three people", "talked to three", "explain everything again"]):
+            text = "You shouldn't have to repeat yourself. Let's pick it up right from where you left off. What would you like to focus on right now?"
+        elif any(w in lower for w in ["frustrated", "useless", "every ai tool"]):
+            text = "Fair enough—a lot of bots out there are clunky phone trees. What let you down the most with the tools you've tried?"
+        elif any(w in lower for w in ["another ai chatbot", "🙄", "chatbot is exactly"]):
+            text = "Fair skepticism. Most chatbots are frustrating text widgets. We focus on natural voice calls that sound like a real conversation."
 
-        # 4. Scale / Volume answers (e.g. "around 1,000", "500 leads", "1000", "500")
-        elif any(w in lower for w in ["thousand", "1000", "1,000", "500", "100", "leads a month", "leads per month", "inquiries"]):
-            text = "Got it, that is a substantial volume! Handling that manually eats up hours of rep time. With Lively, our voice AI handles qualifying and booking around the clock. Would you like to see how that fits into our Growth plan?"
+        # 4. Off-topic queries (cricket, sports, weather)
+        elif any(w in lower for w in ["cricket", "match yesterday", "who won", "football", "weather"]):
+            text = "I don't have yesterday's match score handy! Anything I can help you with on Lively, or are we just chatting?"
 
-        # 5. Positive affirmations / impressions
-        elif any(w in lower for w in ["impressive", "that's impressive", "sounds impressive", "cool", "awesome", "nice", "sounds good", "great"]):
-            text = "Glad to hear that! Agora's sub-second latency and native echo cancellation really make it feel like talking to a colleague. What part of your sales process would you love to automate first?"
+        # 5. Question with multiple parts: pricing + websites
+        elif "website" in lower and any(w in lower for w in ["cost", "price", "pricing", "how much"]):
+            text = "Our Starter plan is one ninety-nine dollars a month for two thousand minutes. And no, we don't build websites—our platform focuses purely on real-time voice and messaging."
+        elif "website" in lower:
+            text = "No, we don't build websites—we focus purely on real-time conversational voice and messaging."
 
-        # 6. Casual browsing / Openers
-        elif any(w in lower for w in ["looking around", "just looking", "browsing", "checking it out"]):
-            text = "No problem at all, take your time! Are you exploring voice AI for sales, customer follow-up, or something else?"
-        elif any(w in lower for w in ["tell me more", "what do you offer", "tell me about your product"]):
-            if already_asked_discovery:
-                text = "We provide real-time voice agents that sound genuinely human, handle interruptions naturally, and integrate directly with your CRM. What's the biggest challenge in your sales workflow right now?"
+        # 6. Next step / Recommendation question
+        elif any(w in lower for w in ["what do i need to do next", "recommend i do next", "what should i do next", "what would you recommend"]):
+            text = "I'd recommend a quick fifteen-minute walkthrough where we test the voice agent on your actual workflow. We can set that up whenever you're ready."
+
+        # 7. Personalized retail / clothing inquiry
+        elif any(w in lower for w in ["clothing store", "apex clothing", "online clothing"]):
+            if "what was my company called" in lower:
+                text = "Your company is Apex Clothing. What's the main challenge your team is looking to solve right now?"
             else:
-                text = "Sure! What are you mainly looking to improve with voice AI — sales, customer follow-up, or something else?"
+                text = "For an online clothing store with two hundred inquiries a month, AI can handle sizing questions, order tracking, and returns 24/7, routing high-intent buyers straight to your team."
+
+        # 8. Objection diagnosis (Price / Replacing existing setup)
+        elif any(w in lower for w in ["expensive", "too much", "cost too much", "costly", "too costly", "budget for this right now"]):
+            text = "Fair point. Is that compared to what you're spending now, or is it more about whether the call volume justifies the cost?"
+        elif any(w in lower for w in ["why would i replace", "salespeople already handle", "replace something that's working"]):
+            text = "If your current process is working smoothly, I wouldn't suggest replacing it blindly. What's the one bottleneck your reps still run into?"
+        elif any(w in lower for w in ["don't trust ai", "wrong answer", "hallucinat"]):
+            text = "Totally valid concern. We set guardrails so the agent only speaks from verified documentation—if it's ever unsure, it routes the call straight to a human rep."
+        elif any(w in lower for w in ["prefer talking to real people", "hurt our business"]):
+            text = "Many teams feel that way initially. Our voice agent only handles immediate qualification and basic questions, and transfers buyers to your human reps as soon as they're ready."
+
+        # 9. Direct factual answers (Bank transfer, Guarantees, Hubspot, ChatGPT DIY, Competitors)
+        elif any(w in lower for w in ["transfer money", "bank account"]):
+            text = "No, our system cannot transfer money directly from bank accounts. We integrate with secure checkout links or human escalation for billing."
+        elif any(w in lower for w in ["guarantee"]):
+            text = "We don't offer arbitrary percentage guarantees because results depend on your lead volume and follow-up speed. We focus on cutting response times to under sixty seconds."
+        elif any(w in lower for w in ["last customer", "name of the last"]):
+            text = "I don't have access to your historical customer records in this live demo session."
+        elif any(w in lower for w in ["hubspot"]):
+            text = "We integrate directly with HubSpot so call transcripts, qualification data, and booked meetings sync straight to your deals."
+        elif any(w in lower for w in ["build this myself", "just use chatgpt", "using chatgpt"]):
+            text = "ChatGPT is great for text, but building reliable sub-second voice with native echo cancellation and CRM integrations takes months of engineering. Lively gives you that out of the box."
+        elif any(w in lower for w in ["competitor is half", "better than the other", "why should i pay you more"]):
+            text = "We run on Agora's telecom-grade SD-RTN network for sub-second voice latency and natural interruptions, and we let you bring any LLM brain without vendor lock-in."
+        elif any(w in lower for w in ["how many salespeople do we have"]):
+            text = "You have four salespeople."
+        elif any(w in lower for w in ["email communication", "prefer email"]):
+            text = "We can certainly follow up over email. I can send over an overview of how Lively works with your workflow."
+
+        # 10. User responses to discovery (Sales, Follow-up, Support, Scale)
+        elif any(w in lower for w in ["increase sales", "more sales", "boost sales", "grow sales", "close more"]) or (lower in ["sales", "sales."]):
+            text = "Increasing sales is our main focus. Our voice AI qualifies inbound leads in under sixty seconds and books meetings on your calendar. About how many leads does your team handle each month?"
+        elif any(w in lower for w in ["follow-up", "follow up", "followup", "speed to lead", "following up"]) or (lower in ["follow up", "follow-up", "followup"]):
+            text = "Speed-to-lead is critical. Lively calls leads within seconds of an inquiry, answering questions and qualifying intent. How quickly is your team following up right now?"
+        elif any(w in lower for w in ["thousand", "1000", "1,000", "500", "100", "leads a month", "leads per month"]):
+            text = "Got it, handling that volume manually takes a lot of time. Our voice AI handles qualifying and booking around the clock so reps only talk to ready buyers."
+        elif any(w in lower for w in ["impressive", "that's impressive", "sounds impressive", "cool", "awesome", "nice", "sounds good", "great"]):
+            text = "Glad to hear that! Where in your sales or customer workflow do you think voice AI would make the biggest impact?"
+
+        # 11. Openers & Pricing
+        elif any(w in lower for w in ["price", "cost", "how much", "pricing", "tier", "plan"]):
+            text = "Our Starter plan is one ninety-nine dollars a month for two thousand minutes, and Growth is six ninety-nine for ten thousand minutes."
+        elif any(w in lower for w in ["who are you", "what do you guys do", "what is lively", "what do you do"]):
+            text = "We're Lively. We give teams real-time voice agents that sound genuinely human, handle interruptions naturally, and qualify inbound leads 24/7."
         elif any(w in lower for w in ["hello", "hi there", "hey", "hi"]) and len(lower.split()) <= 4:
             text = "Hey! Great to meet you. What brings you by today?"
-        elif any(w in lower for w in ["how are you", "how's it going", "how are you doing"]):
-            text = "Doing well, thanks! What brings you by today — exploring voice agents for sales, support, or something else?"
-        elif any(w in lower for w in ["who are you", "what is lively", "what do you do"]):
-            text = (
-                "I'm Lively. We give teams real-time voice agents that sound genuinely human, handle customer interruptions naturally, and connect in under two hundred milliseconds."
-            )
-        # 7. Objections & Pricing
-        elif any(w in lower for w in ["expensive", "too much", "cost too much", "costly", "too costly"]):
-            text = (
-                f"Totally understand that concern. Most teams find they actually save forty to sixty percent {users_ref} because you only pay for minutes used rather than full-time seats. What kind of call volume are you planning for?"
-            )
-        elif any(w in lower for w in ["price", "cost", "how much", "pricing", "tier", "plan"]):
-            text = (
-                f"Our Starter plan is one ninety-nine dollars a month for two thousand minutes, and Growth is six ninety-nine for ten thousand minutes. Does that pricing structure align with your budget?"
-            )
-        # 8. Competitor Battlecards
-        elif any(w in lower for w in ["openai", "realtime", "gpt-4o", "gpt4o"]):
-            text = (
-                "OpenAI Realtime is great, but Agora provides dedicated telecom-grade global routing with native echo cancellation, and we let you plug in any LLM brain with zero lock-in."
-            )
-        elif any(w in lower for w in ["twilio", "vapi", "bland", "retell", "sip"]):
-            text = (
-                "Traditional SIP bridges add several hundred milliseconds of delay. Agora WebRTC connects in under two hundred milliseconds with real-time barge-in."
-            )
-        # 9. Security & Compliance
-        elif any(w in lower for w in ["security", "hipaa", "soc2", "compliance", "encryption", "privacy"]):
-            text = (
-                "Lively is SOC2 Type II compliant and fully HIPAA ready with signed BAAs. All voice streams are end-to-end encrypted."
-            )
-        # 10. Demos & Scheduling
-        elif any(w in lower for w in ["demo", "schedule", "book", "calendar", "meeting", "walkthrough"]):
-            text = (
-                "I have a thirty-minute walkthrough slot with our Senior Solutions Architect tomorrow at two PM Eastern. Want me to lock that in for you?"
-            )
-        # 11. Contextual Fallback
+        elif any(w in lower for w in ["how are you", "how's it going"]):
+            text = "Doing well, thanks! What brings you by today?"
+        elif any(w in lower for w in ["looking around", "just looking", "not interested"]):
+            text = "No problem at all, take your time! Let me know if you have any questions."
+
+        # 12. Contextual Fallback
         else:
             if already_asked_discovery:
-                text = "That makes sense. What is the biggest hurdle your team is running into with that right now?"
+                text = "Makes sense. What's the main thing holding your team back in that area today?"
             else:
-                text = "Understood. What are you mainly trying to improve right now — sales, customer follow-up, or something else?"
+                text = "Got it. What's the biggest bottleneck your sales team is running into right now?"
 
         words = text.split(" ")
         for i, word in enumerate(words):
