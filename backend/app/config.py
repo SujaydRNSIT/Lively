@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "qwen/qwen3.8-27b"
 
     # NVIDIA NIM Settings (Secondary / Reasoning / Fallback)
-    NVIDIA_NIM_API_KEY: str = ""
+    NVIDIA_NIM_API_KEY: str = "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"
     NVIDIA_NIM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
     NVIDIA_NIM_MODEL: str = "meta/llama-3.2-11b-vision-instruct"
 

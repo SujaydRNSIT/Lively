@@ -77,6 +77,13 @@ async def handle_chat_completion(
         for m in body.messages
     ]
 
+    # If Agora payload only sends the single latest turn, reconstruct full multi-turn context from deal_state.transcript
+    if len(raw_messages) <= 1 and deal_state.transcript:
+        raw_messages = [
+            {"role": "assistant" if t.role == "agent" else "user", "content": t.content}
+            for t in deal_state.transcript[-8:]
+        ]
+
     asyncio.create_task(ws_manager.broadcast_state(channel_name, {
         "type": "AGENT_STATUS",
         "data": {"status": "thinking"}
