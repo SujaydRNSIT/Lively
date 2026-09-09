@@ -53,7 +53,7 @@ class AgoraConvoAIService:
                 "channel": channel_name,
                 "token": agent_token,
                 "agent_rtc_uid": str(agent_rtc_uid),
-                "remote_rtc_uids": [str(customer_uid)],
+                "remote_rtc_uids": ["*"],
                 "idle_timeout": 300,
                 "llm": {
                     "url": llm_endpoint,
@@ -92,7 +92,25 @@ class AgoraConvoAIService:
                     }
                 },
                 "turn_detection": {
-                    "mode": "default"
+                    "mode": "default",
+                    "config": {
+                        "speech_threshold": 0.4,
+                        "start_of_speech": {
+                            "mode": "vad",
+                            "vad_config": {
+                                "interrupt_duration_ms": 160,
+                                "speaking_interrupt_duration_ms": 320,
+                                "prefix_padding_ms": 600
+                            }
+                        },
+                        "end_of_speech": {
+                            "mode": "semantic",
+                            "semantic_config": {
+                                "silence_duration_ms": 320,
+                                "max_wait_ms": 2500
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -168,7 +168,7 @@ export const App: React.FC = () => {
         setRemoteVolume(remote);
         if (remote > 5) {
           setAgentStatus('speaking');
-        } else if (local > 5) {
+        } else if (local > 2) {
           setAgentStatus('listening');
         } else {
           setAgentStatus('idle');
@@ -323,6 +323,15 @@ export const App: React.FC = () => {
 
     try {
       setIsConnecting(true);
+
+      // Pre-flight check browser microphone access
+      const micCheck = await AgoraVoiceManager.checkMicrophone();
+      if (!micCheck.available) {
+        alert(micCheck.error || 'Microphone access is unavailable. Please check browser permissions.');
+        setIsConnecting(false);
+        return;
+      }
+
       const userUid = Math.floor(1000 + Math.random() * 9000);
       const { token, app_id } = await generateRtcToken(channelName, userUid);
 
@@ -336,8 +345,9 @@ export const App: React.FC = () => {
       if (app_id && app_id !== 'demo_app_id') {
         try {
           await voiceManagerRef.current?.joinChannel(app_id, channelName, token, userUid);
-        } catch (voiceErr) {
-          console.warn('[AgoraRTC] Local microphone join warning:', voiceErr);
+        } catch (voiceErr: any) {
+          console.error('[AgoraRTC] Local microphone join error:', voiceErr);
+          alert(`Microphone Connection Issue: ${voiceErr?.message || 'Could not acquire microphone'}. Please check microphone settings.`);
         }
       }
 
