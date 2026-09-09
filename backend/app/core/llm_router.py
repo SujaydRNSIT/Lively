@@ -334,8 +334,8 @@ class LLMRouter:
             model=model_name,
             messages=messages,
             stream=True,
-            temperature=0.5,
-            max_tokens=180
+            temperature=0.6,
+            max_tokens=350
         )
         think_state: dict = {}
         async for chunk in response:
@@ -360,8 +360,8 @@ class LLMRouter:
             model=model_name,
             messages=messages,
             stream=True,
-            temperature=0.5,
-            max_tokens=230
+            temperature=0.6,
+            max_tokens=350
         )
         think_state: dict = {}
         async for chunk in response:

@@ -12,7 +12,6 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
 import { EmailCaptureModal } from './components/EmailCaptureModal';
 import { AgoraVoiceManager } from './services/agoraRtc';
-import { BrowserVoiceSession } from './services/browserVoice';
 import {
   fetchAgoraConfig,
   generateRtcToken,
@@ -159,7 +158,6 @@ export const App: React.FC = () => {
   };
 
   const voiceManagerRef = useRef<AgoraVoiceManager | null>(null);
-  const browserVoiceRef = useRef<BrowserVoiceSession | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Initialize Agora voice manager
@@ -188,7 +186,6 @@ export const App: React.FC = () => {
 
     return () => {
       voiceManagerRef.current?.leaveChannel();
-      browserVoiceRef.current?.stop();
       wsRef.current?.close();
     };
   }, []);
@@ -315,10 +312,6 @@ export const App: React.FC = () => {
   const handleToggleConnect = async () => {
     if (isConnected) {
       await voiceManagerRef.current?.leaveChannel();
-      if (browserVoiceRef.current) {
-        browserVoiceRef.current.stop();
-        browserVoiceRef.current = null;
-      }
       if (agentSessionId) {
         stopConversationalAgent(agentSessionId, channelName).catch(console.error);
         setAgentSessionId(null);
@@ -346,26 +339,6 @@ export const App: React.FC = () => {
         } catch (voiceErr) {
           console.warn('[AgoraRTC] Local microphone join warning:', voiceErr);
         }
-      }
-
-      // If cloud agent is in simulation/mock mode, activate the browser voice fallback
-      if (agentRes.mock) {
-        console.log('[App] Cloud agent is in simulation mode. Activating browser voice fallback...');
-        const browserVoice = new BrowserVoiceSession(
-          channelName,
-          (status) => setAgentStatus(status),
-          (role, text) => {
-            setDealState((prev) => ({
-              ...prev,
-              transcript: [
-                ...prev.transcript,
-                { role, content: text, timestamp: Date.now() / 1000 }
-              ]
-            }));
-          }
-        );
-        browserVoice.start();
-        browserVoiceRef.current = browserVoice;
       }
 
       setIsConnected(true);

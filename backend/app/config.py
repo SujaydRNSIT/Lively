@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # Groq Settings (Primary low-latency LLM)
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
 
     # NVIDIA NIM Settings (Secondary / Reasoning / Fallback)
     NVIDIA_NIM_API_KEY: str = ""

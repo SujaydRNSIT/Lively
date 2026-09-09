@@ -78,10 +78,7 @@ class AgoraConvoAIService:
                         "url": "wss://api.minimax.io/ws/v1/t2a_v2",
                         "model": "speech-2.6-turbo",
                         "voice_setting": {
-                            "voice_id": "English_captivating_female1",
-                            "speed": 1.05,
-                            "pitch": 0,
-                            "emotion": "cheerful"
+                            "voice_id": "English_captivating_female1"
                         }
                     }
                 },
@@ -95,15 +92,7 @@ class AgoraConvoAIService:
                     }
                 },
                 "turn_detection": {
-                    "mode": "server_vad",
-                    "silence_duration_ms": 600,
-                    "prefix_padding_ms": 300,
-                    "interrupt_sensitivity": 0.7
-                },
-                "advanced_features": {
-                    "enable_aec": True,
-                    "enable_ns": True,
-                    "enable_agc": True
+                    "mode": "default"
                 }
             }
         }
