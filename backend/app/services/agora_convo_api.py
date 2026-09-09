@@ -18,8 +18,7 @@ class AgoraConvoAIService:
         # Shared connection-pooled HTTP client — avoids TCP+TLS handshake per request
         self._http_client = httpx.AsyncClient(
             timeout=30.0,
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-            http2=True
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
         )
 
     def _get_headers(self) -> Dict[str, str]:
