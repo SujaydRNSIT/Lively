@@ -31,14 +31,18 @@
 
 | Capability | What It Does |
 |:---|:---|
-| **Real-Time Voice Conversations** | Sub-300ms round-trip latency with Agora's telecom-grade RTC — natural turn-taking, barge-in, echo cancellation, and noise suppression out of the box. |
-| **Adaptive Sales Brain** | Every utterance is analyzed for buyer intent, scale, budget, timeline, competitor mentions, and authority level. The agent adapts its pitch in real time. |
-| **Persistent Deal Memory** | Additive & mergeable deal state across all turns — nothing is forgotten. Budget changes? User scale updates? Lively merges them with a full change-log. |
-| **Autonomous Booking & Email Dispatch** | Proactively locks in calendar reservations, generates Google Meet links, and dispatches full `.ics` calendar invites directly to the user's inbox via SMTP. |
-| **RAG-Grounded Responses** | Battlecards, pricing sheets, and competitive intelligence are retrieved in real time so every claim is grounded in facts, not hallucinations. |
-| **Live Tool Calling** | `book_meeting()`, `create_or_update_crm_lead()`, `escalate_to_human()` — the agent takes real-world action while the conversation is unfolding. |
-| **Multi-LLM Router** | Groq LPU for ultra-low-latency voice turns, NVIDIA NIM for complex reasoning, and a built-in sales specialist brain as a zero-downtime fallback. |
-| **Resilient Live Telemetry** | Real-time TTFT, response latency, model distribution, memory diffs, and live transcription streamed via WebSocket with automatic reconnect and polling fallbacks. |
+| **Real-Time Voice Conversations** | Agora's real-time network with natural turn-taking, semantic end-of-speech detection, barge-in, echo cancellation, and noise suppression. |
+| **Adaptive Sales Brain** | Every buyer turn becomes structured signals (intent, seats, budget, authority, timeline, pain points, objections, sentiment) from a small fast LLM, with a rule-based fallback that respects negation. The agent adapts from the live deal state. |
+| **Lead Qualification** | Budget, authority, need and timeline start as Unknown and are filled only from what the buyer says. The lead is marked qualified once all four are known. |
+| **Persistent Deal Memory** | Additive, mergeable deal state across turns with a full change log (e.g. seats 20 → 80), so the buyer can change requirements or return to earlier topics. |
+| **Pricing, Trust & Product Objections** | Pricing, competitor, trust, security, product and latency objections are detected, tracked when repeated, and closed when the buyer accepts the answer or moves on. |
+| **Availability-Aware Booking** | Requested times are checked against the demo calendar (working days, demo hours, existing bookings). Taken slots get alternatives; confirmed demos get a shared video room and an `.ics` invite sent in the background. |
+| **Human Handoff With Context** | Escalates when the buyer asks for a person, raises legal or contract terms, stays frustrated, or keeps repeating an objection. The AE gets a brief with qualification, objections and the full transcript. |
+| **CRM & Activity Log** | Every change updates the lead and its activity log; optional HubSpot sync with a private-app token. |
+| **RAG-Grounded Responses** | Pricing, product and competitor battlecards are retrieved per turn; the knowledge base avoids statistics the prompt forbids. |
+| **Resilient LLM Routing** | Groq streams each answer; NVIDIA NIM and a built-in brain take over only if the previous provider fails before its first token, so the buyer never hears a restarted answer. |
+| **Honest Live Telemetry** | Backend TTFT (request received → first token to Agora), model distribution, failovers and memory diffs, streamed per visitor over an authenticated WebSocket. Nothing is shown until turns are measured. |
+| **Per-Visitor Security** | Each visitor gets a private channel with a signed session token; Agora must present a shared secret to call the LLM endpoint; chat and email are rate limited. |
 | **Dark / Light Theme** | Editorial luxury design system with full dark mode and one-click Sun/Moon toggle. |
 
 <br/>
@@ -80,17 +84,17 @@
 │  │  1. LISTEN    → Extract intent, budget, competitors      │  │
 │  │  2. ADAPT     → RAG retrieval + next-best-action         │  │
 │  │  3. REMEMBER  → Additive deal state merge + change-log   │  │
-│  │  4. ACT       → Tool-calling & autonomous email dispatch │  │
+│  │  4. ACT       → Booking, CRM sync, handoff, invites      │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
 │  ┌────────────────┐  ┌──────────────┐  ┌───────────────────┐   │
 │  │  LLM Router    │  │  Tool Layer  │  │ Telemetry Engine  │   │
 │  │                │  │              │  │                   │   │
 │  │  Groq LPU      │  │ book_meeting │  │ TTFT / p50 / p95  │   │
-│  │  (sub-200ms)   │  │ update_crm   │  │ Model distrib.    │   │
+│  │  (primary)     │  │ update_crm   │  │ Model distrib.    │   │
 │  │                │  │ escalate     │  │ Memory diffs      │   │
 │  │  NVIDIA NIM    │  │ send_invite  │  │ Stage tracking    │   │
-│  │  (reasoning)   │  └──────────────┘  └───────────────────┘   │
+│  │  (fallback)    │  └──────────────┘  └───────────────────┘   │
 │  │                │                                            │
 │  │  Built-in      │                                            │
 │  │  (fallback)    │                                            │
@@ -157,8 +161,12 @@ AGORA_REST_KEY=your_agora_rest_key
 AGORA_REST_SECRET=your_agora_rest_secret
 
 # ── LLM Providers ────────────────────────────────
-GROQ_API_KEY=gsk_...                      # Primary — low-latency voice turns
-NVIDIA_NIM_API_KEY=nvapi-...              # Secondary — complex reasoning
+GROQ_API_KEY=gsk_...                      # Primary — voice answers + turn understanding
+NVIDIA_NIM_API_KEY=nvapi-...              # Fallback if Groq fails before answering
+
+# ── Security ─────────────────────────────────────
+LIVELY_LLM_SHARED_SECRET=<random>         # Agora presents this to /v1/chat/completions
+SESSION_SECRET=<random>                   # Signs per-visitor session tokens
 
 # ── SMTP / Real Email & Calendar Invites ────────
 SMTP_HOST=smtp.gmail.com
@@ -252,8 +260,20 @@ Use the built-in **Scripted Demo Harness** tab or speak live into your microphon
 <tr>
 <td align="center"><strong>4</strong></td>
 <td><em>"Can we schedule a live technical walkthrough tomorrow at 2 PM EST?"</em></td>
-<td>Confirms the booking, automatically dispatches the Google Meet bridge &amp; calendar invite to the buyer's email, and renders the confirmed meeting card.</td>
-<td>Autonomous <code>book_meeting()</code> → SMTP dispatch → CRM update</td>
+<td>Checks the demo calendar, books the slot (or offers alternatives if it's taken), and emails the invite with a shared video room link.</td>
+<td>Availability check → booking → background invite → CRM activity</td>
+</tr>
+<tr>
+<td align="center"><strong>5</strong></td>
+<td><em>"How do I know it won't make things up to our customers?"</em></td>
+<td>Explains the guardrails honestly; when the buyer says it makes sense, the objection closes.</td>
+<td>Trust objection raised → accepted</td>
+</tr>
+<tr>
+<td align="center"><strong>6</strong></td>
+<td><em>"Our legal team needs custom contract terms. Can I talk to a real person?"</em></td>
+<td>Tells the buyer an account executive is joining with the full context.</td>
+<td>Escalation → handoff brief (qualification, objections, transcript)</td>
 </tr>
 </table>
 
@@ -278,11 +298,15 @@ Lively/
 │   │   ├── main.py             # FastAPI entry point & router mounting
 │   │   ├── config.py           # Pydantic settings with auto Render URL fallback
 │   │   ├── api/                # REST & WebSocket route handlers
+│   │   │   ├── session.py      # Per-visitor private channel + signed session token
 │   │   │   ├── deal_state.py   # State snapshots, contact capture & reset
 │   │   │   ├── llm_proxy.py    # OpenAI-compatible /v1/chat/completions endpoint
 │   │   │   └── tools.py        # Calendar booking & CRM sync endpoints
 │   │   ├── core/               # Cognitive Sales Engine
-│   │   │   ├── deal_state_engine.py   # Additive deal memory & autonomous booking
+│   │   │   ├── understanding.py       # Per-turn structured signals (LLM JSON, rule fallback)
+│   │   │   ├── deal_state_engine.py   # Qualification, objections, booking, escalation, CRM activity
+│   │   │   ├── security.py            # Session tokens, Agora secret check, rate limits
+│   │   │   ├── background.py          # Email/DB/CRM work off the voice turn
 │   │   │   ├── decision.py            # Next-best-action decision engine
 │   │   │   ├── llm_router.py          # Multi-provider LLM routing (Groq → NIM → fallback)
 │   │   │   ├── prompts.py            # Persona & autonomous scheduling instructions
@@ -290,8 +314,7 @@ Lively/
 │   │   │   └── tools_defs.py         # Function calling definitions & auto-dispatch
 │   │   ├── services/
 │   │   │   ├── agora_convo_api.py    # Agora Conversational AI agent lifecycle
-│   │   │   ├── email_service.py      # SMTP & ICS calendar invite generator
-│   │   │   └── rag_service.py        # Battlecard knowledge base retriever
+│   │   │   └── email_service.py      # SMTP, ICS invites & AE handoff email
 │   │   └── routers/
 │   │       └── telemetry.py          # WebSocket telemetry connection manager
 │   ├── requirements.txt        # Core Python dependencies
@@ -316,8 +339,6 @@ Lively/
 │   └── public/
 │       ├── logo-light.png      # Brand assets
 │       └── logo-dark.png
-│
-└── LIMITATIONS.md              # Architectural notes & future roadmap
 ```
 
 <br/>
@@ -334,8 +355,18 @@ Lively/
 | `AGORA_REST_SECRET` | Yes | Agora REST API Secret |
 | `GROQ_API_KEY` | Recommended | Groq LPU API key — primary low-latency voice turns |
 | `GROQ_MODEL` | — | Model name (default: `qwen/qwen3.8-27b`) |
-| `NVIDIA_NIM_API_KEY` | — | NVIDIA NIM API key — complex reasoning fallback |
-| `NVIDIA_NIM_MODEL` | — | NIM model (default: `meta/llama-3.1-70b-instruct`) |
+| `EXTRACTION_MODEL` | — | Fast model for per-turn understanding (default: `llama-3.1-8b-instant`) |
+| `EXTRACTION_TIMEOUT_SECONDS` | — | Budget for understanding before falling back to rules (default: `0.6`) |
+| `NVIDIA_NIM_API_KEY` | — | NVIDIA NIM API key — used if Groq fails before answering |
+| `NVIDIA_NIM_MODEL` | — | NIM model (default: `meta/llama-3.2-11b-vision-instruct`) |
+| `LIVELY_LLM_SHARED_SECRET` | Production | Secret Agora sends to `/v1/chat/completions` (random per process if unset) |
+| `SESSION_SECRET` | Production | Signs visitor session tokens (random per process if unset) |
+| `REQUIRE_LLM_SECRET` | — | Reject LLM calls without the secret or a session (default: `true`) |
+| `CORS_ALLOWED_ORIGINS` | — | Comma-separated frontend origins (default: localhost dev ports) |
+| `MEETING_ROOM_BASE_URL` | — | Host for per-booking video rooms (default: `https://meet.jit.si`) |
+| `CALENDAR_WORKING_DAYS` / `CALENDAR_SLOT_TIMES` | — | Demo calendar (default: Mon–Fri, 10:00 / 14:00 / 16:00 EST) |
+| `ESCALATION_NOTIFY_EMAIL` | — | AE inbox that receives the handoff brief |
+| `HUBSPOT_ACCESS_TOKEN` | — | Optional HubSpot private-app token for CRM sync |
 | `BACKEND_PUBLIC_URL` | Cloud | Public URL of the backend (e.g. `https://lively-8s3x.onrender.com`) without trailing slash |
 | `SMTP_HOST` | Email | Outgoing mail server (e.g. `smtp.gmail.com`) |
 | `SMTP_PORT` | Email | Port for TLS encryption (default: `587`) |
@@ -345,7 +376,19 @@ Lively/
 | `SMTP_FROM_EMAIL` | Email | Sender address matching authenticated account |
 | `SMTP_USE_TLS` | Email | Enable TLS encryption (default: `true`) |
 | `AGORA_AGENT_VOICE` | — | Voice synthesis model (default: `en-US-JennyNeural`) |
-| `DEBUG` | — | Enable verbose debugging (default: `true`) |
+| `DEBUG` | — | Verbose logging only; never disables auth (default: `false`) |
+
+<br/>
+
+---
+
+## Security Model
+
+- **Per-visitor channels.** `POST /api/session` returns a private channel and an HMAC-signed token. Deal-state, tools, RTC-token and agent routes, and the telemetry WebSocket (`?token=`), only work for the token's own channel.
+- **Agora → LLM endpoint.** The backend gives Agora `LIVELY_LLM_SHARED_SECRET` as `llm.api_key`; `/v1/chat/completions` rejects calls without it or a visitor session. Set `REQUIRE_LLM_SECRET=false` only if your agent can't send it.
+- **No credentials in code.** Every key comes from the environment (see `.env.example`).
+- **Rate limits.** New sessions per IP, chat turns per session, and invites per conversation.
+- **CORS.** Explicit origins; credentials are never allowed cross-origin.
 
 <br/>
 
@@ -353,16 +396,15 @@ Lively/
 
 ## Testing
 
-Run the automated test suite locally:
+Run the automated test suite locally (tests disable real email, LLM and CRM calls):
 
 ```bash
 # Activate virtual environment
 .venv\Scripts\activate.bat   # Windows
 # source .venv/bin/activate  # macOS / Linux
 
-# Run test suites
-python backend/tests/test_phase6_7_8.py
-python backend/tests/test_email_and_contact.py
+cd backend
+python -m pytest tests -q
 ```
 
 <br/>

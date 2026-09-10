@@ -26,74 +26,72 @@ WEEKDAYS = {
 }
 
 
-def parse_slot_to_datetimes(slot_str: str) -> Tuple[datetime, datetime]:
+MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+
+
+def parse_slot_to_datetimes(slot_str: str, now: Optional[datetime] = None) -> Tuple[datetime, datetime]:
     """
-    Parses natural language strings like 'Thursday at 2:00 PM EST', 'Tomorrow at 10:00 AM', 
-    or 'Friday 3 PM' into UTC start and end datetimes.
+    Parses strings like 'Thursday at 2:00 PM EST', 'Tomorrow at 10:00 AM', 'Monday Sep 14 at 10:00 AM EST'
+    or 'Friday 3 PM' into UTC start and end datetimes. Relative days are resolved in the slot's timezone.
     """
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     lower = slot_str.lower()
 
-    # Determine target date
-    target_date = now.date()
-
-    if "tomorrow" in lower:
-        target_date = target_date + timedelta(days=1)
+    # Timezone: explicit label (whole words only, so "latest" isn't EST) or the calendar default
+    if re.search(r"\b(?:pst|pdt|pacific)\b", lower):
+        utc_offset = -8
+    elif re.search(r"\b(?:cst|cdt|central)\b", lower):
+        utc_offset = -6
+    elif re.search(r"\b(?:est|edt|et|eastern)\b", lower):
+        utc_offset = -5
+    elif re.search(r"\b(?:utc|gmt)\b", lower):
+        utc_offset = 0
     else:
+        utc_offset = settings.CALENDAR_UTC_OFFSET_HOURS
+
+    local_today = (now + timedelta(hours=utc_offset)).date()
+    target_date = local_today
+    month_day = re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b", lower)
+    if month_day:
+        candidate = datetime(local_today.year, MONTHS[month_day.group(1)], int(month_day.group(2))).date()
+        target_date = candidate if candidate >= local_today else candidate.replace(year=candidate.year + 1)
+    elif "day after tomorrow" in lower:
+        target_date = local_today + timedelta(days=2)
+    elif re.search(r"\btomorrow\b", lower):
+        target_date = local_today + timedelta(days=1)
+    elif not re.search(r"\b(?:today|tonight)\b", lower):
         for day_name, day_idx in WEEKDAYS.items():
             if day_name in lower:
-                current_weekday = target_date.weekday()
-                days_ahead = (day_idx - current_weekday) % 7
-                if days_ahead == 0:
-                    days_ahead = 7  # Next week's weekday if today is the day
-                target_date = target_date + timedelta(days=days_ahead)
+                days_ahead = (day_idx - local_today.weekday()) % 7 or 7  # same weekday means next week
+                target_date = local_today + timedelta(days=days_ahead)
                 break
 
-    # Determine target time
-    hour = 14  # default 2 PM
-    minute = 0
-    is_pm = True
+    # Time: prefer an explicit AM/PM, then HH:MM, then "at 2", else 2 PM
+    hour, minute = 14, 0
+    m = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)", lower)
+    if m:
+        hour, minute = int(m.group(1)), int(m.group(2) or 0)
+        is_pm = m.group(3).startswith("p")
+        if is_pm and hour < 12:
+            hour += 12
+        elif not is_pm and hour == 12:
+            hour = 0
+    else:
+        m = re.search(r"\b(\d{1,2}):(\d{2})\b", lower) or re.search(r"\bat\s+(\d{1,2})\b(?!\s*(?:mins?|minutes|hours?|users|seats))", lower)
+        if m:
+            hour = int(m.group(1))
+            minute = int(m.group(2)) if m.lastindex and m.lastindex >= 2 else 0
+            if hour < 8:
+                hour += 12  # business hours: "at 2" means 2 PM
 
-    # Look for patterns like '2:00 PM', '10:30 am', '2 pm', '14:00'
-    time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', lower)
-    if time_match:
-        h = int(time_match.group(1))
-        m = int(time_match.group(2)) if time_match.group(2) else 0
-        meridiem = time_match.group(3)
-
-        if meridiem == "pm" and h < 12:
-            h += 12
-        elif meridiem == "am" and h == 12:
-            h = 0
-        elif not meridiem and h < 8:
-            # Assume PM for typical business hours 1..7
-            h += 12
-
-        hour = h
-        minute = m
-
-    # Parse duration
-    duration_minutes = 30
-    dur_match = re.search(r'(\d+)\s*(?:-| )(?:minute|min)', lower)
+    duration = 30
+    dur_match = re.search(r"(\d+)\s*-?\s*(?:minute|min)", lower)
     if dur_match:
-        duration_minutes = int(dur_match.group(1))
+        duration = int(dur_match.group(1))
 
-    # Construct start and end datetime in UTC (approximating EST as UTC-5 / UTC-4)
-    # If EST is specified, adjust 5 hours to UTC
-    tz_offset_hours = 0
-    if "est" in lower or "edt" in lower:
-        tz_offset_hours = 5
-    elif "pst" in lower or "pdt" in lower:
-        tz_offset_hours = 8
-    elif "cst" in lower or "cdt" in lower:
-        tz_offset_hours = 6
-
-    naive_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
-    # Add offset to convert to UTC
-    start_utc = (naive_dt + timedelta(hours=tz_offset_hours)).replace(tzinfo=timezone.utc)
-    end_utc = start_utc + timedelta(minutes=duration_minutes)
-
-    return start_utc, end_utc
+    naive_local = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
+    start_utc = (naive_local - timedelta(hours=utc_offset)).replace(tzinfo=timezone.utc)
+    return start_utc, start_utc + timedelta(minutes=duration)
 
 
 def build_google_calendar_url(
@@ -160,7 +158,7 @@ def generate_ics_calendar(
         f"DESCRIPTION:{clean_details}",
         f"LOCATION:{location}",
         "STATUS:CONFIRMED",
-        f"ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN={attendee_email}:mailto:{attendee_email}",
+        *([f"ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN={attendee_email}:mailto:{attendee_email}"] if attendee_email else []),
         "ORGANIZER;CN=Lively AI:mailto:notifications@lively.ai",
         "BEGIN:VALARM",
         "TRIGGER:-PT15M",
@@ -370,17 +368,17 @@ def render_html_email(
 
       <div style="text-align: center; margin: 28px 0;">
         <a href="{meet_link}" class="btn-primary" target="_blank" style="margin-right: 8px;">
-          📹 Join Google Meet Room
+          Join video room
         </a>
         <a href="{calendar_link}" class="btn-secondary" target="_blank">
-          📅 Block on Google Calendar
+          Add to Google Calendar
         </a>
       </div>
 
       <div class="agenda">
         <h4>Discussion Agenda</h4>
         <ul>
-          <li><strong>Sub-300ms Conversational Voice AI</strong>: Live latency & full-duplex acoustic demonstration.</li>
+          <li><strong>Real-time conversational voice</strong>: live latency and interruption handling on your own scenarios.</li>
           <li><strong>Autonomous Objection Handling</strong>: Real-time RAG & programmatic battlecards.</li>
           <li><strong>Enterprise Integration</strong>: CRM synchronization, lead routing, and telemetry APIs.</li>
         </ul>
@@ -395,6 +393,30 @@ def render_html_email(
 </body>
 </html>
 """
+
+
+def _smtp_send(msg: Any, to_email: str) -> Tuple[bool, Optional[str]]:
+    """Blocking SMTP delivery. Callers run it in a worker thread (see app.core.background)."""
+    user = settings.SMTP_USER.strip() if settings.SMTP_USER else None
+    password = settings.SMTP_PASSWORD.replace(" ", "").strip() if settings.SMTP_PASSWORD else None
+    if not (settings.SMTP_HOST and user and password):
+        return False, "SMTP credentials (SMTP_USER / SMTP_PASSWORD) not configured in environment."
+    try:
+        if settings.SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+        else:
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+            if settings.SMTP_USE_TLS:
+                server.starttls()
+        server.login(user, password)
+        sender = user if "gmail" in settings.SMTP_HOST.lower() else (settings.SMTP_FROM_EMAIL or user)
+        server.sendmail(sender, [to_email], msg.as_string())
+        server.quit()
+        logger.info(f"Email delivered via SMTP to {to_email}")
+        return True, None
+    except Exception as e:
+        logger.error(f"SMTP delivery failed: {e}. Falling back to preview recording.")
+        return False, str(e)
 
 
 class EmailService:
@@ -413,7 +435,7 @@ class EmailService:
         time_slot = meeting_data.get("time", "Tomorrow at 2:00 PM EST")
         topic = meeting_data.get("topic", "Lively Real-Time Voice AI Sales Deep-Dive")
         host = meeting_data.get("host", "Senior Solutions Architect")
-        meet_link = meeting_data.get("meeting_link", "https://meet.google.com/new")
+        meet_link = meeting_data.get("meeting_link") or ""
         meeting_id = meeting_data.get("meeting_id", f"mtg_{int(time.time())}")
 
         # Parse start and end times for Google Calendar and ICS
@@ -424,9 +446,9 @@ class EmailService:
             f"Topic: {topic}\n"
             f"Host: {host}\n"
             f"Attendee: {to_email}\n"
-            f"Google Meet Bridge: {meet_link}\n\n"
+            f"Video room: {meet_link}\n\n"
             f"Agenda:\n"
-            f"1. Live Sub-300ms RTC Voice Demo\n"
+            f"1. Live real-time voice demo\n"
             f"2. Objection Handling & RAG Architecture\n"
             f"3. Enterprise CRM & Live Handoffs"
         )
@@ -466,8 +488,8 @@ class EmailService:
             f"Lively AI - Demo Confirmed\n\n"
             f"Hello,\n"
             f"Your product walkthrough has been scheduled for {time_slot}.\n\n"
-            f"Google Meet Link: {meet_link}\n"
-            f"Block on Google Calendar: {gcal_url}\n\n"
+            f"Video room: {meet_link}\n"
+            f"Add to Google Calendar: {gcal_url}\n\n"
             f"Host: {host}\n"
             f"Topic: {topic}\n\n"
             f"We look forward to speaking with you.\n"
@@ -505,7 +527,6 @@ class EmailService:
         subject = f"Confirmed: Lively AI Demo on {prep['time_slot']}"
 
         clean_user = settings.SMTP_USER.strip() if settings.SMTP_USER else None
-        clean_password = settings.SMTP_PASSWORD.replace(" ", "").strip() if settings.SMTP_PASSWORD else None
         from_header = f"{settings.SMTP_FROM_NAME or 'Lively AI'} <{clean_user}>" if clean_user else settings.SMTP_FROM
 
         # Create multipart message
@@ -531,32 +552,7 @@ class EmailService:
         except Exception as e:
             logger.warning(f"Failed to attach ICS payload: {e}")
 
-        # Check SMTP settings
-        smtp_configured = bool(settings.SMTP_HOST and clean_user and clean_password)
-        smtp_success = False
-        smtp_error = None
-
-        if smtp_configured:
-            try:
-                logger.info(f"Connecting to SMTP server {settings.SMTP_HOST}:{settings.SMTP_PORT} as {clean_user}...")
-                if settings.SMTP_PORT == 465:
-                    server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
-                else:
-                    server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
-                    if settings.SMTP_USE_TLS:
-                        server.starttls()
-
-                server.login(clean_user, clean_password)
-                sender_addr = clean_user if ("gmail" in (settings.SMTP_HOST or "").lower()) else (settings.SMTP_FROM_EMAIL or clean_user)
-                server.sendmail(sender_addr, [clean_email], msg.as_string())
-                server.quit()
-                smtp_success = True
-                logger.info(f"Demo confirmation email successfully dispatched via SMTP to {clean_email}")
-            except Exception as e:
-                smtp_error = str(e)
-                logger.error(f"SMTP delivery failed: {e}. Falling back to preview recording.")
-        else:
-            smtp_error = "SMTP credentials (SMTP_USER / SMTP_PASSWORD) not configured in environment."
+        smtp_success, smtp_error = _smtp_send(msg, clean_email)
 
         # Always save local preview files for inspection and robust testing
         preview_id = f"{int(time.time())}_{re.sub(r'[^a-zA-Z0-9]', '_', clean_email)}"
@@ -582,6 +578,32 @@ class EmailService:
             "preview_html": html_file,
             "preview_ics": ics_file
         }
+
+
+    def send_handoff_notification(self, to_email: str, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Emails the AE desk the handoff context so the human can join without re-asking anything."""
+        s = record.get("summary", {})
+        objections = ", ".join(f"{o['type']} (\"{o['utterance'][:60]}\")" for o in s.get("open_objections", [])) or "none"
+        lines = [
+            f"Reason: {record['reason']} (urgency: {record['urgency']})",
+            f"Join the buyer: {record['bridge_url']}",
+            "",
+            f"Company: {s.get('company')}",
+            f"Contact: {s.get('contact_name')} <{s.get('contact_email') or 'no email yet'}>",
+            f"Qualification: {s.get('qualification_score')}/100{' (qualified)' if s.get('lead_qualified') else ''}",
+            f"Budget: {s.get('budget') or 'unknown'} | Authority: {s.get('authority') or 'unknown'} | Timeline: {s.get('timeline') or 'unknown'}",
+            f"Need: {'; '.join(s.get('need') or []) or 'unknown'} | Seats: {s.get('seats') or 'unknown'}",
+            f"Open objections: {objections}",
+            f"Demo: {s.get('scheduled_demo') or 'not booked'}",
+            "",
+            "Recent conversation:",
+        ] + [f"{t['role'].title()}: {t['content']}" for t in record.get("recent_turns", [])]
+        msg = MIMEText("\n".join(lines), "plain", "utf-8")
+        msg["Subject"] = f"[Lively handoff] {s.get('company')}: {record['reason']}"
+        msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>" if settings.SMTP_USER else settings.SMTP_FROM
+        msg["To"] = to_email
+        delivered, error = _smtp_send(msg, to_email)
+        return {"delivered": delivered, "error": error}
 
 
 # Global singleton instance
