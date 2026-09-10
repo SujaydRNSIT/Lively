@@ -309,30 +309,11 @@ class LLMRouter:
 
         stream_success = False
 
-        # Smart routing: proactively route complex enterprise turns to NVIDIA NIM
-        use_nvidia_primary = self.should_route_to_nvidia(latest_user_msg, deal_state)
-
-        if use_nvidia_primary and self.nvidia_client:
-            # Attempt 1 (complex turn): NVIDIA NIM for higher reasoning quality
-            try:
-                selected_model = f"nvidia:{settings.NVIDIA_NIM_MODEL}"
-                logger.info(f"Smart-routing complex turn to NVIDIA NIM: {selected_model}")
-                async for chunk in self._stream_nvidia_client(
-                    augmented_messages, channel_name, temperature=turn_temp, top_p=turn_top_p, max_tokens=turn_max_tokens
-                ):
-                    if not ttft_recorded:
-                        first_token_time = time.time()
-                        ttft_recorded = True
-                    yield chunk
-                stream_success = True
-            except Exception as e:
-                logger.warning(f"NVIDIA NIM smart-route failed ({e}). Falling back to Groq...")
-
-        # Attempt: Groq LPU (low-latency voice turns: sub-300ms TTFT)
-        if not stream_success and self.groq_client:
+        # Primary: Groq LPU (low-latency voice turns: sub-250ms TTFT)
+        if self.groq_client:
             try:
                 selected_model = f"groq:{settings.GROQ_MODEL}"
-                logger.info(f"Routing turn to Groq LPU (low-latency): {selected_model}")
+                logger.info(f"Routing turn to Groq LPU (primary): {selected_model}")
                 async for chunk in self._stream_groq_client(
                     augmented_messages, channel_name, temperature=turn_temp, top_p=turn_top_p, max_tokens=turn_max_tokens, allow_thinking=allow_thinking
                 ):
@@ -342,13 +323,13 @@ class LLMRouter:
                     yield chunk
                 stream_success = True
             except Exception as e:
-                logger.warning(f"Groq turn failed ({e}). Falling back...")
+                logger.warning(f"Groq turn failed ({e}). Falling back to NVIDIA NIM...")
 
-        # Fallback: NVIDIA NIM (if not already tried)
-        if not stream_success and self.nvidia_client and not use_nvidia_primary:
+        # Secondary / Fallback: NVIDIA NIM
+        if not stream_success and self.nvidia_client:
             try:
                 selected_model = f"nvidia:{settings.NVIDIA_NIM_MODEL}"
-                logger.info(f"Attempting fallback to NVIDIA NIM: {selected_model}")
+                logger.info(f"Routing turn to NVIDIA NIM (fallback): {selected_model}")
                 async for chunk in self._stream_nvidia_client(
                     augmented_messages, channel_name, temperature=turn_temp, top_p=turn_top_p, max_tokens=turn_max_tokens
                 ):
