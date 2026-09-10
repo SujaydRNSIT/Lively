@@ -20,6 +20,14 @@ from app.core.tools_impl.escalation import escalation_service
 from app.db.redis_client import redis_client
 from app.db.postgres import async_session_factory, DealStateTable
 from app.services.email_service import email_service
+from app.core.reasoning import build_reasoning_trace
+from app.core.followup import generate_follow_up_draft
+
+# Lazy import to avoid circular dependency with app.routers.telemetry
+def _get_ws_manager():
+    from app.routers.telemetry import ws_manager as _wsm
+    return _wsm
+
 
 logger = logging.getLogger("lively.core.deal_state_engine")
 
@@ -95,11 +103,27 @@ class DealStateEngine:
             u = understanding or rule_based_understanding(text)
             state.transcript.append(ChatTurn(role=role, content=text, timestamp=time.time(), sentiment=u.get("sentiment") or sentiment))
             self._apply_understanding(state, text, u)
+        elif role == "system" and text.strip().upper() == "[CALL_ENDED]":
+            # Feature D: trigger post-call follow-up draft generation in the background
+            spawn(self._generate_follow_up, state)
         else:
             state.transcript.append(ChatTurn(role=role, content=text, timestamp=time.time(), sentiment=sentiment))
             if role == "agent":
                 self.check_agent_demo_confirmation(state, text)
         self._finalize(state, log_start)
+
+        # Feature A: build and store the decision trace for buyer turns
+        if role == "buyer":
+            u = state.last_understanding or {}
+            delta = state.change_log[log_start:]
+            trace = build_reasoning_trace(u, delta)
+            state.agent_reasoning = trace
+            # Emit over WebSocket so the UI panel updates in real time
+            spawn(_get_ws_manager().broadcast_state, channel_name, {
+                "type": "AGENT_REASONING",
+                "data": trace,
+            })
+
         return state
 
     def _finalize(self, state: DealState, log_start: int) -> None:
@@ -112,6 +136,20 @@ class DealStateEngine:
             crm_service.record_activity(state, entry.field, entry.description)
         crm_service.upsert_from_state(state)
         spawn(self._persist_state, state)
+
+    async def _generate_follow_up(self, state: DealState) -> None:
+        """Feature D: generate a post-call follow-up email draft in the background."""
+        try:
+            draft = await generate_follow_up_draft(state)
+            state.follow_up_draft = draft
+            state.updated_at = time.time()
+            spawn(_get_ws_manager().broadcast_state, state.channel_name, {
+                "type": "DEAL_STATE_UPDATE",
+                "data": state.model_dump(),
+            })
+            logger.info(f"[FollowUp] Draft generated for channel {state.channel_name} via {draft.get('source', '?')}")
+        except Exception as e:
+            logger.warning(f"[FollowUp] Failed to generate draft for {state.channel_name}: {e}")
 
     # ------------------------------------------------------------ helpers
     @staticmethod

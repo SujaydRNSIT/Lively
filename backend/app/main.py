@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api import rtc_token, agora_agent, llm_proxy, tools, deal_state, session
+from app.api.dialer import router as dialer_router
 from app.routers import telemetry
 from app.db.redis_client import redis_client
 from app.db.postgres import init_db
@@ -57,6 +58,7 @@ app.include_router(agora_agent.router)
 app.include_router(tools.router)
 app.include_router(deal_state.router)
 app.include_router(telemetry.router)
+app.include_router(dialer_router)
 
 @app.get("/")
 async def root():

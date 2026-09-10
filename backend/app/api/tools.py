@@ -100,3 +100,101 @@ async def api_send_meeting_invite(
         message = f"Invite for {demo['time']} is on its way to {clean_email}."
     logger.info(f"Meeting invite requested for {clean_email} on channel {req.channel_name} ({demo.get('invite_status')})")
     return {"status": "success", "message": message, "data": demo}
+
+
+# ---------------------------------------------------------------------- Deal Desk
+
+class DealDeskProposeRequest(BaseModel):
+    channel_name: str
+    percentage:   float
+    trade:        Optional[str] = None    # "annual" | "case_study" | "seats" | None
+
+class DealDeskApproveRequest(BaseModel):
+    channel_name:   str
+    concession_id:  str
+    approved_by:    str = "manager"
+
+@router.post("/deal-desk/propose")
+async def api_deal_desk_propose(
+    req: DealDeskProposeRequest,
+    x_lively_session: Optional[str] = Header(default=None, alias="X-Lively-Session"),
+):
+    """
+    Receive a concession proposal (from the UI sandbox or a direct API call).
+    In normal voice-call flow the LLM calls propose_concession via the tool registry;
+    this endpoint lets the demo harness trigger it directly.
+    """
+    require_channel_access(req.channel_name, x_lively_session)
+    from app.core.deal_desk import deal_desk
+    trade = req.trade if req.trade and req.trade != "none" else None
+    rec   = deal_desk.propose(req.channel_name, req.percentage, trade)
+    state = deal_state_engine.get_or_create(req.channel_name)
+    state.deal_desk = rec.to_dict()
+    await _broadcast(req.channel_name)
+    await ws_manager.broadcast_state(req.channel_name, {"type": "DEAL_DESK_UPDATE", "data": rec.to_dict()})
+    return {"status": "ok", "data": rec.to_dict()}
+
+
+@router.post("/deal-desk/approve")
+async def api_deal_desk_approve(
+    req: DealDeskApproveRequest,
+    x_lively_session: Optional[str] = Header(default=None, alias="X-Lively-Session"),
+):
+    """Manager clicks Approve in the cockpit UI."""
+    require_channel_access(req.channel_name, x_lively_session)
+    from app.core.deal_desk import deal_desk
+    rec = deal_desk.manager_approve(req.channel_name, req.concession_id, req.approved_by)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Concession not found or already resolved.")
+    state = deal_state_engine.get_or_create(req.channel_name)
+    state.deal_desk = rec.to_dict()
+    await _broadcast(req.channel_name)
+    await ws_manager.broadcast_state(req.channel_name, {"type": "DEAL_DESK_UPDATE", "data": rec.to_dict()})
+    return {"status": "ok", "data": rec.to_dict()}
+
+
+@router.get("/deal-desk/history/{channel_name}")
+async def api_deal_desk_history(
+    channel_name: str,
+    x_lively_session: Optional[str] = Header(default=None, alias="X-Lively-Session"),
+):
+    """Return all concession records for a channel (for the history view in the panel)."""
+    require_channel_access(channel_name, x_lively_session)
+    from app.core.deal_desk import deal_desk
+    return {"status": "ok", "history": deal_desk.history(channel_name)}
+
+
+# ---------------------------------------------------------------------- Post-Call Follow-Up
+
+class FollowUpSendRequest(BaseModel):
+    channel_name: str
+    to_email:     str
+
+@router.post("/follow-up/send")
+async def api_follow_up_send(
+    req: FollowUpSendRequest,
+    x_lively_session: Optional[str] = Header(default=None, alias="X-Lively-Session"),
+):
+    """Human explicitly sends the post-call follow-up email draft."""
+    require_channel_access(req.channel_name, x_lively_session)
+    state = deal_state_engine.get_or_create(req.channel_name)
+    draft = state.follow_up_draft
+    if not draft:
+        raise HTTPException(status_code=400, detail="No follow-up draft available yet.")
+
+    clean_email = req.to_email.strip()
+    if extract_email(clean_email) != clean_email:
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    # Re-use the existing email service to send the draft
+    from app.services.email_service import email_service
+    result = await email_service.send_email(
+        to_email = clean_email,
+        subject  = draft.get("subject", "Following up from Lively"),
+        html_body= draft.get("body", "").replace("\n", "<br>"),
+        text_body= draft.get("body", ""),
+    )
+    # Mark as sent
+    state.follow_up_draft = {**draft, "sent": True, "sent_to": clean_email, "sent_at": __import__("time").time()}
+    await _broadcast(req.channel_name)
+    return {"status": "ok", "result": result}

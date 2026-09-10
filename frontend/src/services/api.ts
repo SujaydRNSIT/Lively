@@ -244,3 +244,92 @@ export async function streamCustomLlmChat(
   }
   return fullText;
 }
+
+// ------------------------------------------------------------------ Deal Desk
+
+export async function proposeConcession(channelName: string, percentage: number, trade?: string) {
+  const res = await apiFetch(`${API_BASE}/tools/deal-desk/propose`, {
+    method: 'POST',
+    body: JSON.stringify({ channel_name: channelName, percentage, trade: trade || null }),
+  });
+  if (!res.ok) throw new Error('Failed to propose concession');
+  return await res.json();
+}
+
+export async function approveConcession(channelName: string, concessionId: string, approvedBy = 'manager') {
+  const res = await apiFetch(`${API_BASE}/tools/deal-desk/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ channel_name: channelName, concession_id: concessionId, approved_by: approvedBy }),
+  });
+  if (!res.ok) throw new Error('Failed to approve concession');
+  return await res.json();
+}
+
+export async function fetchDealDeskHistory(channelName: string) {
+  const res = await apiFetch(`${API_BASE}/tools/deal-desk/history/${encodeURIComponent(channelName)}`);
+  if (!res.ok) throw new Error('Failed to fetch Deal Desk history');
+  return (await res.json()).history as any[];
+}
+
+// ------------------------------------------------------------------ SmartDialer
+
+export interface LeadInput { name: string; phone?: string; company?: string; }
+
+export async function createDialerCampaign(name: string, leads: LeadInput[], aiSlots = 3) {
+  const res = await apiFetch(`${API_BASE}/dialer/campaigns`, {
+    method: 'POST',
+    body: JSON.stringify({ name, leads, ai_slots: aiSlots }),
+  });
+  if (!res.ok) throw new Error('Failed to create campaign');
+  return await res.json();
+}
+
+export async function listDialerCampaigns() {
+  const res = await apiFetch(`${API_BASE}/dialer/campaigns`);
+  if (!res.ok) throw new Error('Failed to list campaigns');
+  return (await res.json()).campaigns as any[];
+}
+
+export async function getDialerCampaign(campaignId: string) {
+  const res = await apiFetch(`${API_BASE}/dialer/campaigns/${encodeURIComponent(campaignId)}`);
+  if (!res.ok) throw new Error('Campaign not found');
+  return (await res.json()).data;
+}
+
+export async function startDialerCampaign(campaignId: string) {
+  const res = await apiFetch(`${API_BASE}/dialer/campaigns/${encodeURIComponent(campaignId)}/start`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to start campaign');
+  return await res.json();
+}
+
+export async function pauseDialerCampaign(campaignId: string) {
+  const res = await apiFetch(`${API_BASE}/dialer/campaigns/${encodeURIComponent(campaignId)}/pause`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to pause campaign');
+  return await res.json();
+}
+
+export async function resetDialerBreaker(campaignId: string) {
+  const res = await apiFetch(`${API_BASE}/dialer/campaigns/${encodeURIComponent(campaignId)}/reset-breaker`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to reset circuit breaker');
+  return await res.json();
+}
+
+// ------------------------------------------------------------------ Post-Call Follow-Up
+
+export async function sendFollowUpEmail(channelName: string, toEmail: string) {
+  const res = await apiFetch(`${API_BASE}/tools/follow-up/send`, {
+    method: 'POST',
+    body: JSON.stringify({ channel_name: channelName, to_email: toEmail }),
+  });
+  if (!res.ok) throw new Error('Failed to send follow-up email');
+  return await res.json();
+}
+
+export async function triggerCallEnd(channelName: string) {
+  // Signal to the backend that the call has ended so follow-up generation starts
+  const res = await apiFetch(`${API_BASE}/deal-state/${encodeURIComponent(channelName)}/call-end`, {
+    method: 'POST',
+  });
+  // Best-effort: the endpoint may not exist yet in older deployments
+  return res.ok ? await res.json() : { status: 'skipped' };
+}

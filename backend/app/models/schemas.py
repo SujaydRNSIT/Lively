@@ -104,6 +104,12 @@ class DealState(BaseModel):
     next_best_action: str = "Find out what the buyer is trying to solve before pitching."
     change_log: List[ChangeLogEntry] = Field(default_factory=list)
     transcript: List[ChatTurn] = Field(default_factory=list)
+    # Feature A: agent decision trace — populated after every buyer turn
+    agent_reasoning: Optional[Dict[str, Any]] = None
+    # Feature B: deal desk — most recent concession record for this channel
+    deal_desk: Optional[Dict[str, Any]] = None
+    # Feature D: post-call follow-up draft — populated on call end
+    follow_up_draft: Optional[Dict[str, Any]] = None
     created_at: float = Field(default_factory=time.time)
     updated_at: float = Field(default_factory=time.time)
 

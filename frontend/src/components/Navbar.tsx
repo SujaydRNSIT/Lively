@@ -1,13 +1,13 @@
 import React from 'react';
-import { BookOpen, LayoutDashboard, PlaySquare, BarChart3, Sun, Moon, Mail } from 'lucide-react';
+import { BookOpen, LayoutDashboard, PlaySquare, BarChart3, Sun, Moon, Mail, Phone } from 'lucide-react';
 import { AgoraConfig } from '../types';
 
 interface NavbarProps {
   agoraConfig: AgoraConfig | null;
   isConnected: boolean;
   onOpenKnowledge: () => void;
-  activeTab: 'cockpit' | 'scenario' | 'analytics';
-  setActiveTab: (tab: 'cockpit' | 'scenario' | 'analytics') => void;
+  activeTab: 'cockpit' | 'scenario' | 'analytics' | 'dialer';
+  setActiveTab: (tab: 'cockpit' | 'scenario' | 'analytics' | 'dialer') => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   userEmail?: string;
@@ -136,8 +136,26 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
         >
           <BarChart3 className={`w-3.5 h-3.5 transition ${activeTab === 'analytics' ? 'text-[#6166cf]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
-          <span>Telemetry & Latency Observability</span>
+          <span>Telemetry &amp; Latency Observability</span>
           {activeTab === 'analytics' && (
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#6166cf] rounded-full" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('dialer')}
+          className={`group relative flex shrink-0 items-center gap-2 px-2.5 sm:px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[.12em] transition cursor-pointer ${
+            activeTab === 'dialer'
+              ? 'text-[#20201e] dark:text-[#f1f0ea]'
+              : 'text-[#77756e] dark:text-[#828896] hover:text-[#20201e] dark:hover:text-[#f1f0ea]'
+          }`}
+        >
+          <Phone className={`w-3.5 h-3.5 transition ${activeTab === 'dialer' ? 'text-[#6166cf]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
+          <span>Smart Dialer</span>
+          <span className="ml-1 px-1.5 py-0.5 rounded text-[8.5px] editorial-mono tracking-normal bg-[#eceae2] dark:bg-[#1e2436] text-[#696862] dark:text-[#9aa0ad] font-medium">
+            NEW
+          </span>
+          {activeTab === 'dialer' && (
             <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#6166cf] rounded-full" />
           )}
         </button>
