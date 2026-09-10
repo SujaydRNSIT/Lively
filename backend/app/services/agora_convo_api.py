@@ -54,7 +54,7 @@ class AgoraConvoAIService:
                 "token": agent_token,
                 "agent_rtc_uid": str(agent_rtc_uid),
                 "remote_rtc_uids": ["*"],
-                "idle_timeout": 300,
+                "idle_timeout": 600,
                 "llm": {
                     "url": llm_endpoint,
                     "api_key": settings.LIVELY_LLM_SHARED_SECRET,

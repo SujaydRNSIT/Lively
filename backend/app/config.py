@@ -71,8 +71,8 @@ class Settings(BaseSettings):
     PINECONE_INDEX_NAME: str = "lively-rag"
     PINECONE_NAMESPACE: str = "knowledge-base"
 
-    # Voice Turn Pacing (Pause in seconds after user finishes speaking before model responds)
-    AGENT_RESPONSE_DELAY_SECONDS: float = 0.0
+    # Pacing / Latency controls
+    AGENT_RESPONSE_DELAY_SECONDS: float = 0.3
 
     # SMTP / Email Delivery Settings
     SMTP_HOST: Optional[str] = "smtp.gmail.com"

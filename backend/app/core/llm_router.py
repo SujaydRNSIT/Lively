@@ -302,11 +302,6 @@ class LLMRouter:
             if m.get("role") != "system":
                 augmented_messages.append(m)
 
-        augmented_messages.append({
-            "role": "system",
-            "content": "STRICT VOICE LIMIT: Respond in 1 to 2 spoken sentences (under 30 words). Never monologue, use bullet points, or list multiple points. Directly answer the user's question first. BANNED: Never say 'That is a great question', 'I totally understand', 'That makes complete sense', or 'I appreciate your honesty'."
-        })
-
         stream_success = False
 
         # Primary: Groq LPU (low-latency voice turns: sub-250ms TTFT)
@@ -395,14 +390,7 @@ class LLMRouter:
             "top_p": top_p,
             "max_tokens": max_tokens,
         }
-        if not allow_thinking:
-            params["extra_body"] = {"thinking": {"type": "disabled"}}
-
-        try:
-            response = await self.groq_client.chat.completions.create(**params)
-        except Exception:
-            params.pop("extra_body", None)
-            response = await self.groq_client.chat.completions.create(**params)
+        response = await self.groq_client.chat.completions.create(**params)
 
         think_state: dict = {}
         async for chunk in response:
