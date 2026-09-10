@@ -1,4 +1,5 @@
 import time
+import uuid
 from enum import Enum
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -25,31 +26,39 @@ class ToolCall(BaseModel):
     timestamp: float = Field(default_factory=time.time)
 
 class ObjectionRecord(BaseModel):
-    id: str = Field(default_factory=lambda: f"obj_{int(time.time()*1000)}")
-    type: str = "general" # pricing, competitor, latency, security, complexity
+    id: str = Field(default_factory=lambda: f"obj_{uuid.uuid4().hex[:10]}")
+    type: str = "general" # pricing, competitor, latency, trust, security, product
     category: Optional[str] = None
     utterance: str
     resolved: bool = False
     status: str = "Active"
+    # How it was resolved: accepted | moved_on | advanced_to_demo | manual
+    resolution: Optional[str] = None
     suggested_rebuttal: Optional[str] = None
+    times_raised: int = 1
+    turns_since_raised: int = 0
     timestamp: float = Field(default_factory=time.time)
 
 ObjectionItem = ObjectionRecord
 
 class Lead(BaseModel):
+    lead_id: Optional[str] = None
     company: str = "Prospective Client"
     contact_name: str = "Prospect"
     contact_email: Optional[str] = None
-    deal_value: str = "$50,000 ARR"
+    deal_value: Optional[str] = None
     status: str = "discovery"
     notes: Optional[str] = ""
     last_synced: Optional[float] = None
+    external_system: Optional[str] = None
+    external_id: Optional[str] = None
 
 class BANTStatus(BaseModel):
-    budget: Dict[str, Any] = Field(default_factory=lambda: {"status": "Evaluating", "value": "$50,000 ARR", "notes": ""})
-    authority: Dict[str, Any] = Field(default_factory=lambda: {"status": "Identified", "role": "VP Engineering / Product", "decision_maker": True})
-    need: Dict[str, Any] = Field(default_factory=lambda: {"status": "Identified", "pain_points": ["Sub-300ms RTC Voice", "Barge-in"], "urgency": "High", "scale": "10 seats"})
-    timeline: Dict[str, Any] = Field(default_factory=lambda: {"status": "Evaluating", "timeframe": "Q1 / Immediate", "go_live": ""})
+    # Every dimension starts Unknown and is only marked Identified from what the buyer actually says.
+    budget: Dict[str, Any] = Field(default_factory=lambda: {"status": "Unknown", "value": None, "notes": ""})
+    authority: Dict[str, Any] = Field(default_factory=lambda: {"status": "Unknown", "role": None, "decision_maker": None})
+    need: Dict[str, Any] = Field(default_factory=lambda: {"status": "Unknown", "pain_points": [], "urgency": None, "scale": None})
+    timeline: Dict[str, Any] = Field(default_factory=lambda: {"status": "Unknown", "timeframe": None, "go_live": ""})
 
 class ChangeLogEntry(BaseModel):
     field: str
@@ -65,23 +74,34 @@ class DealState(BaseModel):
     contact_name: str = "Prospect"
     contact_email: Optional[str] = None
     decision_maker: str = "Unknown"
-    needs: List[str] = Field(default_factory=lambda: ["Low-latency voice", "Barge-in handling"])
-    users: int = 10
-    budget: str = "$50,000 ARR"
-    timeline: str = "Q1"
+    needs: List[str] = Field(default_factory=list)
+    users: Optional[int] = None
+    budget: Optional[str] = None
+    timeline: Optional[str] = None
     competitor_mentioned: Optional[str] = None
     objections: List[ObjectionRecord] = Field(default_factory=list)
     stage: DealStageEnum = DealStageEnum.DISCOVERY
     sentiment: str = "Neutral"
     sentiment_score: float = 0.0
-    buyer_persona: str = "Technical / Product Leader"
+    buyer_persona: str = "Unknown"
     bant: BANTStatus = Field(default_factory=BANTStatus)
+    qualification_score: int = 0
+    lead_qualified: bool = False
+    qualified_at: Optional[float] = None
     active_objections: List[ObjectionRecord] = Field(default_factory=list)
     resolved_objections: List[ObjectionRecord] = Field(default_factory=list)
     action_items: List[str] = Field(default_factory=list)
     scheduled_demo: Optional[Dict[str, Any]] = None
+    # Buyer asked for a demo but gave no usable time yet; the agent should offer open slots.
+    pending_demo_request: bool = False
+    # Requested time was unavailable: {"requested", "reason", "alternatives"}
+    slot_conflict: Optional[Dict[str, Any]] = None
+    available_slots: List[str] = Field(default_factory=list)
+    escalation: Optional[Dict[str, Any]] = None
     crm_lead: Lead = Field(default_factory=Lead)
-    next_best_action: str = "Introduce product value proposition and ask about current voice AI stack pain points."
+    crm_activity: List[Dict[str, Any]] = Field(default_factory=list)
+    last_understanding: Optional[Dict[str, Any]] = None
+    next_best_action: str = "Find out what the buyer is trying to solve before pitching."
     change_log: List[ChangeLogEntry] = Field(default_factory=list)
     transcript: List[ChatTurn] = Field(default_factory=list)
     created_at: float = Field(default_factory=time.time)

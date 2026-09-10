@@ -98,7 +98,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
           </h2>
 
           <p className="text-xs sm:text-sm text-[#696862] dark:text-[#9aa0ad] leading-relaxed">
-            Enter your email to receive your automated <strong className="text-[#20201e] dark:text-[#f1f0ea]">Google Meet link</strong> and <strong className="text-[#20201e] dark:text-[#f1f0ea]">Google Calendar block</strong> the moment a demo is locked in by voice or UI.
+            Enter your email to receive the <strong className="text-[#20201e] dark:text-[#f1f0ea]">video room link</strong> and <strong className="text-[#20201e] dark:text-[#f1f0ea]">calendar invite</strong> the moment a demo is booked by voice or UI.
           </p>
         </div>
 
@@ -106,7 +106,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
         <div className="mt-4 grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-[#f7f6f0] dark:bg-[#181d2c] border hairline text-[11px] text-[#4c4b46] dark:text-[#a09e97]">
           <div className="flex items-center gap-2">
             <Video size={13} className="text-[#6166cf] shrink-0" />
-            <span>Instant Google Meet bridge</span>
+            <span>Shared video room link</span>
           </div>
           <div className="flex items-center gap-2">
             <Calendar size={13} className="text-[#6166cf] shrink-0" />

@@ -31,8 +31,8 @@ DOCUMENTS_SOURCE = [
             "Lively Pricing Structure:\n"
             "- Starter Tier: $199/month includes 2,000 voice minutes, full Agora SD-RTN network access, and Groq LPU routing.\n"
             "- Growth Tier: $699/month includes 10,000 voice minutes, automated CRM sync (Salesforce/HubSpot), custom battlecards, and calendar booking.\n"
-            "- Enterprise Tier: Blended volume pricing starting at $0.05/minute with dedicated SD-RTN routing, private sovereign NVIDIA NIM models, 99.99% uptime SLA, and SOC2/HIPAA compliance.\n"
-            "- TCO comparison: Customers achieve 40% to 60% lower total cost of ownership compared to assembling individual point solutions."
+            "- Enterprise Tier: Volume-based custom pricing with dedicated SD-RTN routing, private NVIDIA NIM model options and a dedicated SLA.\n"
+            "- Seats do not change the plan price; plans are priced by voice minutes, so larger teams usually move from Starter to Growth for volume."
         ),
         "keywords": ["pricing", "price", "cost", "starter", "growth", "enterprise", "discount", "tier", "plan", "budget", "roi", "tco"]
     },
@@ -45,7 +45,7 @@ DOCUMENTS_SOURCE = [
             "1. Network Quality: Agora operates a telecom-grade global SD-RTN network, preventing packet loss and jitter common with public WebSockets.\n"
             "2. Model Sovereignty: OpenAI locks customers into GPT-4o voice. Lively allows complete freedom to route conversational turns to Groq (sub-200ms TTFT LPU) or private NVIDIA NIM enterprise models.\n"
             "3. Audio Processing: Agora's native acoustic echo cancellation prevents self-interruption and feedback loops.\n"
-            "4. Cost: 50% lower cost per minute compared to OpenAI Realtime token pricing."
+            "4. Cost control: pick the model per turn instead of paying one vendor's per-token voice pricing."
         ),
         "keywords": ["openai", "openai realtime", "gpt-4o", "gpt4o", "chatgpt", "competitor", "comparison"]
     },
@@ -55,22 +55,24 @@ DOCUMENTS_SOURCE = [
         "category": "battlecard",
         "content": (
             "Why Lively + Agora outperforms Twilio / Vapi:\n"
-            "1. Latency: Twilio SIP media bridges introduce 400-800ms transport latency. Agora WebRTC provides sub-200ms glass-to-glass latency.\n"
+            "1. Latency: SIP media bridges add transport hops; Agora carries audio over its own real-time WebRTC network end to end.\n"
             "2. Native Turn-Taking: Agora handles barge-in at the edge, cutting speech transmission immediately when user speaks.\n"
             "3. Direct Custom LLM Brain: Zero middleman markup on tokens."
         ),
         "keywords": ["twilio", "vapi", "bland", "retell", "elevenlabs", "sip", "telephony", "competitor"]
     },
     {
-        "doc_id": "case_study_fintech",
-        "title": "Case Study: Global FinTech Increases Demo Conversion by 3.2x",
-        "category": "case_study",
+        "doc_id": "integrations_onboarding",
+        "title": "Integrations, Scheduling & Human Handoff",
+        "category": "product",
         "content": (
-            "A global financial services provider deployed Lively Voice AI for inbound demo qualification. "
-            "By delivering sub-350ms response times and instant calendar booking over Agora's HIPAA-compliant voice layer, "
-            "the customer achieved a 3.2x increase in qualified demo bookings and reduced CAC by 44%."
+            "Integrations: call notes, qualification details and booked meetings sync to the CRM (HubSpot supported; Salesforce on Enterprise). "
+            "Scheduling: the agent offers open demo slots during the call and sends a calendar invite with a video room link. "
+            "Human handoff: when a buyer asks for a person, raises contract or legal terms, or stays frustrated, the call is handed to an account executive "
+            "with the full conversation and qualification summary, so the buyer never repeats themselves. "
+            "Guardrails: answers come only from approved documentation; anything uncertain is routed to a human."
         ),
-        "keywords": ["case study", "fintech", "conversion", "roi", "roi proof", "results", "metrics", "customer story"]
+        "keywords": ["integration", "integrations", "crm", "hubspot", "salesforce", "calendar", "handoff", "human", "onboarding", "trust", "accuracy", "hallucination"]
     },
     {
         "doc_id": "faq_security_hipaa",

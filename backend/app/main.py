@@ -3,12 +3,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.api import rtc_token, agora_agent, llm_proxy, tools, deal_state
+from app.api import rtc_token, agora_agent, llm_proxy, tools, deal_state, session
 from app.routers import telemetry
 from app.db.redis_client import redis_client
+from app.db.postgres import init_db
+from app.core.background import drain
+from app.core.understanding import llm_understanding
 
 logging.basicConfig(
-    level=logging.INFO if settings.DEBUG else logging.WARNING,
+    level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger("lively.main")
@@ -17,7 +20,16 @@ logger = logging.getLogger("lively.main")
 async def lifespan(app: FastAPI):
     logger.info("Starting Lively Intelligence Core...")
     await redis_client.connect()
+    await init_db()
+    if settings.LLM_SECRET_IS_EPHEMERAL:
+        logger.warning("LIVELY_LLM_SHARED_SECRET is not set; generated a per-process secret. "
+                       "Agents started before a restart will be rejected. Set it in the environment for production.")
+    if settings.SESSION_SECRET_IS_EPHEMERAL:
+        logger.warning("SESSION_SECRET is not set; visitor sessions will not survive a restart.")
+    if not (settings.SMTP_USER and settings.SMTP_PASSWORD):
+        logger.warning("SMTP is not configured; invites are saved as local previews instead of being emailed.")
     yield
+    await drain(3.0)
     logger.info("Shutting down Lively Intelligence Core...")
 
 app = FastAPI(
@@ -27,27 +39,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS: the API authenticates with headers, not cookies, so credentials are never allowed cross-origin.
 cors_origins = [o.strip() for o in settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
-if "*" in cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=".*",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if "*" in cors_origins else cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Mount API Routers
+app.include_router(session.router)
 app.include_router(llm_proxy.router)
 app.include_router(rtc_token.router)
 app.include_router(agora_agent.router)
@@ -64,15 +67,17 @@ async def root():
         "agora_connected": bool(settings.AGORA_APP_ID),
         "groq_connected": bool(settings.GROQ_API_KEY),
         "nvidia_connected": bool(settings.NVIDIA_NIM_API_KEY),
+        "understanding": "llm" if llm_understanding.client else "rules",
         "endpoints": {
+            "session": "/api/session",
             "openai_chat_completions": "/v1/chat/completions",
             "issue_rtc_token": "/api/agora/token",
-            "agora_agent": "/api/agora/start-agent",
+            "agora_agent": "/api/agent/start",
             "deal_state": "/api/deal-state/{channel_name}",
             "tools_calendar": "/api/tools/book-demo",
             "tools_crm": "/api/tools/sync-crm",
             "tools_escalate": "/api/tools/escalate",
-            "telemetry_websocket": "/api/ws/telemetry/{channel_name}"
+            "telemetry_websocket": "/api/ws/telemetry/{channel_name}?token=..."
         }
     }
 

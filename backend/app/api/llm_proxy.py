@@ -3,12 +3,15 @@ import json
 import logging
 import time
 from typing import Optional, Any
-from fastapi import APIRouter, Request, Header
+from fastapi import APIRouter, Request, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from app.config import settings
 from app.models.schemas import OpenAIChatCompletionRequest
 from app.core.deal_state_engine import deal_state_engine
 from app.core.llm_router import llm_router
+from app.core.understanding import llm_understanding
+from app.core.security import is_valid_llm_secret, parse_session_token, enforce_rate_limit
+from app.core.background import spawn
 from app.routers.telemetry import ws_manager
 
 logger = logging.getLogger("lively.api.llm_proxy")
@@ -32,18 +35,39 @@ def extract_text(content: Any) -> str:
     return str(content or "").strip()
 
 
+def authorize_chat(authorization: Optional[str], session_token: Optional[str], channel_param: Optional[str]) -> str:
+    """
+    Two callers are allowed:
+      * Agora's ConvoAI engine, which sends the shared secret as a Bearer token (channel comes from the URL).
+      * The visitor's browser (sandbox and scripted demo), which sends its own session token.
+    """
+    if is_valid_llm_secret(authorization):
+        if not channel_param:
+            raise HTTPException(status_code=400, detail="Missing channel.")
+        return channel_param
+    session_channel = parse_session_token(session_token)
+    if session_channel:
+        if channel_param and channel_param != session_channel:
+            raise HTTPException(status_code=403, detail="This session cannot write to that channel.")
+        enforce_rate_limit(f"chat:{session_channel}", settings.RATE_LIMIT_CHAT_PER_MINUTE, 60, "Too many messages. Please slow down.")
+        return session_channel
+    if not settings.REQUIRE_LLM_SECRET:
+        return channel_param or "lively-sales-room"
+    logger.warning("Rejected /v1/chat/completions without a valid Agora secret or visitor session. "
+                   "If your Agora agent cannot send llm.api_key, set REQUIRE_LLM_SECRET=false.")
+    raise HTTPException(status_code=401, detail="Unauthorized.")
+
+
 async def handle_chat_completion(
     request: Request,
     body: OpenAIChatCompletionRequest,
     authorization: Optional[str] = None,
-    x_agora_channel: Optional[str] = None
+    x_agora_channel: Optional[str] = None,
+    x_lively_session: Optional[str] = None
 ):
-    logger.info(
-        f"Incoming LLM request: model={body.model}, messages_count={len(body.messages)}, "
-        f"stream={body.stream}, auth={'present' if authorization else 'none'}"
-    )
-
-    channel_name = x_agora_channel or request.query_params.get("channel", "lively-sales-room")
+    started = time.perf_counter()
+    channel_name = authorize_chat(authorization, x_lively_session, x_agora_channel or request.query_params.get("channel"))
+    logger.info(f"Incoming LLM request: channel={channel_name}, messages_count={len(body.messages)}, stream={body.stream}")
     deal_state = deal_state_engine.get_or_create(channel_name)
 
     # Extract user message safely
@@ -70,21 +94,16 @@ async def handle_chat_completion(
 
     if user_utterance and not is_duplicate:
         logger.info(f"User utterance extracted: '{user_utterance}'")
-        deal_state_engine.record_turn(channel_name, role="buyer", text=user_utterance)
+        # Structured understanding from a small fast model, bounded by EXTRACTION_TIMEOUT_SECONDS.
+        # None means the rule-based extractor handles this turn.
+        understanding = await llm_understanding.extract(user_utterance, deal_state)
+        deal_state_engine.record_turn(channel_name, role="buyer", text=user_utterance, understanding=understanding)
         state_snapshot = deal_state.model_dump()
-        # Fire-and-forget: don't block the hot path before LLM streaming
-        asyncio.create_task(ws_manager.broadcast_state(channel_name, {
+        spawn(ws_manager.broadcast_state, channel_name, {
             "type": "TRANSCRIPT_TURN",
-            "data": {
-                "role": "buyer",
-                "text": user_utterance,
-                "deal_state": state_snapshot
-            }
-        }))
-        asyncio.create_task(ws_manager.broadcast_state(channel_name, {
-            "type": "DEAL_STATE_UPDATE",
-            "data": state_snapshot
-        }))
+            "data": {"role": "buyer", "text": user_utterance, "deal_state": state_snapshot}
+        })
+        spawn(ws_manager.broadcast_state, channel_name, {"type": "DEAL_STATE_UPDATE", "data": state_snapshot})
 
     # Prepare normalized messages for LLM
     raw_messages = [
@@ -97,21 +116,17 @@ async def handle_chat_completion(
                 m["content"] = user_utterance
                 break
 
-    # If Agora payload only sends the single latest turn, reconstruct full multi-turn context from deal_state.transcript
+    # If the payload only has the latest turn, rebuild multi-turn context from the transcript
     if len(raw_messages) <= 1 and deal_state.transcript:
         raw_messages = [
             {"role": "assistant" if t.role == "agent" else "user", "content": t.content}
             for t in deal_state.transcript[-8:]
         ]
 
-    asyncio.create_task(ws_manager.broadcast_state(channel_name, {
-        "type": "AGENT_STATUS",
-        "data": {"status": "thinking"}
-    }))
+    spawn(ws_manager.broadcast_state, channel_name, {"type": "AGENT_STATUS", "data": {"status": "thinking"}})
 
     async def token_generator():
         if settings.AGENT_RESPONSE_DELAY_SECONDS > 0:
-            logger.info(f"Conversational pacing: waiting {settings.AGENT_RESPONSE_DELAY_SECONDS}s after user utterance before model responds...")
             await asyncio.sleep(settings.AGENT_RESPONSE_DELAY_SECONDS)
 
         # Emit custom metadata chunk (Task 4.1 Agora custom metadata protocol)
@@ -138,14 +153,15 @@ async def handle_chat_completion(
                 messages=raw_messages,
                 deal_state=deal_state,
                 channel_name=channel_name,
-                model=body.model
+                model=body.model,
+                request_started_at=started
             ):
                 yield chunk
                 if chunk.startswith("data:") and not chunk.startswith("data: [DONE]"):
                     try:
                         data_json = json.loads(chunk[5:].strip())
                         delta = data_json.get("choices", [{}])[0].get("delta", {})
-                        if "content" in delta and delta["content"]:
+                        if delta.get("content"):
                             full_agent_response.append(delta["content"])
                     except Exception:
                         pass
@@ -155,18 +171,11 @@ async def handle_chat_completion(
                 logger.info(f"Agent response completed: '{agent_text[:80]}...'")
                 deal_state_engine.record_turn(channel_name, role="agent", text=agent_text)
                 final_snapshot = deal_state.model_dump()
-                await ws_manager.broadcast_state(channel_name, {
+                spawn(ws_manager.broadcast_state, channel_name, {
                     "type": "TRANSCRIPT_TURN",
-                    "data": {
-                        "role": "agent",
-                        "text": agent_text,
-                        "deal_state": final_snapshot
-                    }
+                    "data": {"role": "agent", "text": agent_text, "deal_state": final_snapshot}
                 })
-                await ws_manager.broadcast_state(channel_name, {
-                    "type": "DEAL_STATE_UPDATE",
-                    "data": final_snapshot
-                })
+                spawn(ws_manager.broadcast_state, channel_name, {"type": "DEAL_STATE_UPDATE", "data": final_snapshot})
 
     return StreamingResponse(
         token_generator(),
@@ -184,9 +193,10 @@ async def chat_completions_v1(
     request: Request,
     body: OpenAIChatCompletionRequest,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
-    x_agora_channel: Optional[str] = Header(default=None, alias="X-Agora-Channel-Name")
+    x_agora_channel: Optional[str] = Header(default=None, alias="X-Agora-Channel-Name"),
+    x_lively_session: Optional[str] = Header(default=None, alias="X-Lively-Session")
 ):
-    return await handle_chat_completion(request, body, authorization, x_agora_channel)
+    return await handle_chat_completion(request, body, authorization, x_agora_channel, x_lively_session)
 
 
 @router.post("/chat/completions")
@@ -194,6 +204,7 @@ async def chat_completions_standard(
     request: Request,
     body: OpenAIChatCompletionRequest,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
-    x_agora_channel: Optional[str] = Header(default=None, alias="X-Agora-Channel-Name")
+    x_agora_channel: Optional[str] = Header(default=None, alias="X-Agora-Channel-Name"),
+    x_lively_session: Optional[str] = Header(default=None, alias="X-Lively-Session")
 ):
-    return await handle_chat_completion(request, body, authorization, x_agora_channel)
+    return await handle_chat_completion(request, body, authorization, x_agora_channel, x_lively_session)

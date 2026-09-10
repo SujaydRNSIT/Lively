@@ -13,6 +13,9 @@ import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
 import { EmailCaptureModal } from './components/EmailCaptureModal';
 import { AgoraVoiceManager } from './services/agoraRtc';
 import {
+  ensureSession,
+  onSessionChange,
+  telemetrySocketUrl,
   fetchAgoraConfig,
   generateRtcToken,
   startConversationalAgent,
@@ -24,51 +27,71 @@ import {
 } from './services/api';
 import { DealState, AgoraConfig } from './types';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Everything starts unknown: qualification is only filled in from what the buyer actually says.
 const INITIAL_DEAL_STATE: DealState = {
-  channel_name: 'lively-sales-room',
+  channel_name: '',
   session_id: 'sess_init',
-  company: 'NextGen AI Enterprises',
-  contact_name: 'Alex Rivera',
-  decision_maker: 'VP of Product',
-  needs: ['Sub-300ms RTC Voice', 'Barge-in handling'],
-  users: 10,
-  budget: '$50,000 ARR',
-  timeline: 'Q1 / Immediate',
+  company: 'Prospective Client',
+  contact_name: 'Prospect',
+  contact_email: null,
+  decision_maker: 'Unknown',
+  needs: [],
+  users: null,
+  budget: null,
+  timeline: null,
   competitor_mentioned: null,
   objections: [],
   stage: 'discovery',
   sentiment: 'Neutral',
   sentiment_score: 0.0,
-  buyer_persona: 'Technical / Product Leader',
+  buyer_persona: 'Unknown',
   bant: {
-    budget: { status: 'Evaluating', value: '$50,000 ARR', notes: '' },
-    authority: { status: 'Identified', role: 'VP of Product', decision_maker: true },
-    need: { status: 'Identified', pain_points: ['Sub-300ms RTC Voice', 'Barge-in'], urgency: 'High', scale: '10 seats' },
-    timeline: { status: 'Evaluating', timeframe: 'Q1 / Immediate', go_live: '' }
+    budget: { status: 'Unknown', value: null },
+    authority: { status: 'Unknown', role: null, decision_maker: null },
+    need: { status: 'Unknown', pain_points: [] },
+    timeline: { status: 'Unknown', timeframe: null }
   },
+  qualification_score: 0,
+  lead_qualified: false,
   active_objections: [],
   resolved_objections: [],
   action_items: [],
   scheduled_demo: null,
+  pending_demo_request: false,
+  slot_conflict: null,
+  available_slots: [],
+  escalation: null,
   crm_lead: {
-    company: 'NextGen AI Enterprises',
-    contact_name: 'Alex Rivera',
-    deal_value: '$50,000 ARR',
+    company: 'Prospective Client',
+    contact_name: 'Prospect',
+    deal_value: null,
     status: 'discovery'
   },
-  next_best_action: 'Introduce product value proposition and ask about current voice AI stack pain points.',
+  crm_activity: [],
+  next_best_action: 'Find out what the buyer is trying to solve before pitching.',
   change_log: [],
   transcript: [],
   created_at: Date.now() / 1000,
   updated_at: Date.now() / 1000
 };
 
+const readStored = (key: string) => {
+  try {
+    return typeof window !== 'undefined' ? localStorage.getItem(key) || '' : '';
+  } catch {
+    return '';
+  }
+};
+
 export const App: React.FC = () => {
-  const [channelName, setChannelName] = useState<string>('lively-sales-room');
+  const [channelName, setChannelName] = useState<string>('');
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [agoraConfig, setAgoraConfig] = useState<AgoraConfig | null>(null);
   const [dealState, setDealState] = useState<DealState>(INITIAL_DEAL_STATE);
   const [activeTab, setActiveTab] = useState<'cockpit' | 'scenario' | 'analytics'>('cockpit');
-  
+
   // Voice call states
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
@@ -80,34 +103,32 @@ export const App: React.FC = () => {
 
   // UI state
   const [isKnowledgeOpen, setIsKnowledgeOpen] = useState<boolean>(false);
-  const [userEmail, setUserEmail] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('lively_user_email') || 'anishhyd995@gmail.com';
-    }
-    return 'anishhyd995@gmail.com';
-  });
-  const [userName, setUserName] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('lively_user_name') || '';
-    }
-    return '';
-  });
+  const [userEmail, setUserEmail] = useState<string>(() => readStored('lively_user_email'));
+  const [userName, setUserName] = useState<string>(() => readStored('lively_user_name'));
   const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('lively_user_email');
-      const prompted = sessionStorage.getItem('lively_prompted_email');
-      return !stored && !prompted;
+    try {
+      return !readStored('lively_user_email') && !sessionStorage.getItem('lively_prompted_email');
+    } catch {
+      return false;
     }
-    return false;
   });
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('lively_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return 'light';
+    const saved = readStored('lively_theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
+
+  // Private per-visitor channel
+  useEffect(() => {
+    const unsubscribe = onSessionChange(session => {
+      setChannelName(session.channel_name);
+      setDealState({ ...INITIAL_DEAL_STATE, channel_name: session.channel_name });
+    });
+    ensureSession()
+      .then(session => setChannelName(session.channel_name))
+      .catch(() => setSessionError('Could not reach the Lively backend. Check that it is running and refresh.'));
+    return () => { unsubscribe(); };
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -123,37 +144,34 @@ export const App: React.FC = () => {
     }
   }, [theme]);
 
-  // Synchronize captured email with the active backend channel
+  // Share the visitor's email with their own channel (used for the demo invite)
   useEffect(() => {
-    if (userEmail && channelName) {
-      setUserContact(channelName, userEmail, userName).catch(() => {});
+    if (channelName && EMAIL_PATTERN.test(userEmail)) {
+      setUserContact(channelName, userEmail, userName || undefined).catch(() => {});
     }
   }, [channelName, userEmail, userName]);
 
   const handleSaveContact = async (email: string, name?: string, company?: string) => {
     setUserEmail(email);
     if (name) setUserName(name);
+    if (!channelName) return;
     try {
       const updatedState = await setUserContact(channelName, email, name, company);
-      if (updatedState) {
-        setDealState(updatedState);
-      }
+      if (updatedState) setDealState(updatedState);
     } catch (err) {
       console.error('Failed to sync contact with backend:', err);
     }
   };
 
-  const handleToggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  const handleToggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
 
   const handleResetSession = async () => {
     try {
       const fresh = await resetDealState(channelName);
-      setDealState(fresh || INITIAL_DEAL_STATE);
+      setDealState(fresh || { ...INITIAL_DEAL_STATE, channel_name: channelName });
     } catch (e) {
       console.warn('Reset error, falling back to local initial state:', e);
-      setDealState(INITIAL_DEAL_STATE);
+      setDealState({ ...INITIAL_DEAL_STATE, channel_name: channelName });
     }
   };
 
@@ -174,12 +192,8 @@ export const App: React.FC = () => {
           setAgentStatus('idle');
         }
       },
-      onAgentConnected: () => {
-        setAgentStatus('speaking');
-      },
-      onAgentDisconnected: () => {
-        setAgentStatus('idle');
-      }
+      onAgentConnected: () => setAgentStatus('speaking'),
+      onAgentDisconnected: () => setAgentStatus('idle')
     });
 
     fetchAgoraConfig().then(setAgoraConfig);
@@ -190,30 +204,21 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Sync WebSocket Telemetry on channel change with resilient auto-reconnect & polling fallback
+  // Live updates for this visitor's channel: WebSocket with auto-reconnect, plus a polling fallback
   useEffect(() => {
     if (!channelName) return;
 
     let isMounted = true;
     let ws: WebSocket | null = null;
-    let reconnectTimeout: any = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    // 1. Initial & periodic polling fallback so UI is never blank even if WebSocket fails
     const syncDealState = async () => {
       try {
         const state = await fetchDealState(channelName);
         if (isMounted && state) {
-          setDealState(prev => {
-            const hasNewTurns = (state.transcript?.length || 0) > (prev.transcript?.length || 0);
-            const hasNewObjections = (state.active_objections?.length || 0) !== (prev.active_objections?.length || 0);
-            const isNewer = (state.updated_at || 0) > (prev.updated_at || 0);
-            if (hasNewTurns || hasNewObjections || isNewer) {
-              return state;
-            }
-            return prev;
-          });
+          setDealState(prev => ((state.updated_at || 0) >= (prev.updated_at || 0) || prev.channel_name !== state.channel_name ? state : prev));
         }
-      } catch (err) {
+      } catch {
         // Silently retry on next tick
       }
     };
@@ -221,73 +226,26 @@ export const App: React.FC = () => {
     syncDealState();
     const pollInterval = setInterval(syncDealState, 2000);
 
-    // 2. Resolve WebSocket URL (fallback to production Render backend if running on Vercel/production)
-    const defaultProdBackend = 'https://lively-8s3x.onrender.com';
-    const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    const backendEnv = (import.meta.env.VITE_BACKEND_URL || (isLocal ? '' : defaultProdBackend)).trim();
-
-    let wsUrl = '';
-    if (backendEnv) {
-      const cleanHost = backendEnv.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      const wsProtocol = backendEnv.startsWith('https://') ? 'wss:' : 'ws:';
-      wsUrl = `${wsProtocol}//${cleanHost}/api/ws/telemetry/${encodeURIComponent(channelName)}`;
-    } else {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsHost = window.location.port === '5173' ? 'localhost:8000' : window.location.host;
-      wsUrl = `${wsProtocol}//${wsHost}/api/ws/telemetry/${encodeURIComponent(channelName)}`;
-    }
-
     const connectWebSocket = () => {
       if (!isMounted) return;
       try {
-        ws = new WebSocket(wsUrl);
+        ws = new WebSocket(telemetrySocketUrl(channelName));
         wsRef.current = ws;
-
-        ws.onopen = () => {
-          console.log('[WS] Connected to', wsUrl);
+        ws.onerror = (err) => console.warn('[WS] Telemetry connection warning:', err);
+        ws.onclose = () => {
+          if (isMounted) reconnectTimeout = setTimeout(connectWebSocket, 3000);
         };
-
-        ws.onerror = (err) => {
-          console.warn('[WS] Telemetry connection warning:', err);
-        };
-
-        ws.onclose = (ev) => {
-          console.log('[WS] Closed:', ev.code, ev.reason);
-          if (isMounted) {
-            reconnectTimeout = setTimeout(connectWebSocket, 3000);
-          }
-        };
-
         ws.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data);
+            if (!isMounted) return;
             if (msg.type === 'DEAL_STATE_SNAPSHOT' || msg.type === 'DEAL_STATE_UPDATE') {
-              if (isMounted) setDealState(msg.data);
+              setDealState(msg.data);
             } else if (msg.type === 'AGENT_STATUS') {
-              if (isMounted) setAgentStatus(msg.data.status);
+              setAgentStatus(msg.data.status);
             } else if (msg.type === 'TRANSCRIPT_TURN') {
-              if (isMounted) {
-                if (msg.data.role === 'agent') {
-                  setAgentStatus('speaking');
-                } else if (msg.data.role === 'buyer') {
-                  setAgentStatus('listening');
-                }
-                if (msg.data.deal_state) {
-                  setDealState(msg.data.deal_state);
-                } else {
-                  setDealState((prev) => ({
-                    ...prev,
-                    transcript: [
-                      ...prev.transcript,
-                      {
-                        role: msg.data.role,
-                        content: msg.data.text || msg.data.content || '',
-                        timestamp: Date.now() / 1000
-                      }
-                    ]
-                  }));
-                }
-              }
+              setAgentStatus(msg.data.role === 'agent' ? 'speaking' : 'listening');
+              if (msg.data.deal_state) setDealState(msg.data.deal_state);
             }
           } catch (e) {
             console.error('WS parse error:', e);
@@ -308,7 +266,6 @@ export const App: React.FC = () => {
     };
   }, [channelName]);
 
-  // Handle Call Connection
   const handleToggleConnect = async () => {
     if (isConnected) {
       await voiceManagerRef.current?.leaveChannel();
@@ -323,8 +280,6 @@ export const App: React.FC = () => {
 
     try {
       setIsConnecting(true);
-
-      // Pre-flight check browser microphone access
       const micCheck = await AgoraVoiceManager.checkMicrophone();
       if (!micCheck.available) {
         alert(micCheck.error || 'Microphone access is unavailable. Please check browser permissions.');
@@ -335,13 +290,9 @@ export const App: React.FC = () => {
       const userUid = Math.floor(1000 + Math.random() * 9000);
       const { token, app_id } = await generateRtcToken(channelName, userUid);
 
-      // Start agent session
       const agentRes = await startConversationalAgent(channelName, userUid);
-      if (agentRes.agent_id) {
-        setAgentSessionId(agentRes.agent_id);
-      }
+      if (agentRes.agent_id) setAgentSessionId(agentRes.agent_id);
 
-      // Join voice channel with local microphone
       if (app_id && app_id !== 'demo_app_id') {
         try {
           await voiceManagerRef.current?.joinChannel(app_id, channelName, token, userUid);
@@ -350,7 +301,6 @@ export const App: React.FC = () => {
           alert(`Microphone Connection Issue: ${voiceErr?.message || 'Could not acquire microphone'}. Please check microphone settings.`);
         }
       }
-
       setIsConnected(true);
     } catch (err: any) {
       console.error('Agent start failed:', err);
@@ -370,16 +320,16 @@ export const App: React.FC = () => {
 
   const handleResolveObjection = async (id: string) => {
     try {
-      const updated = await resolveObjection(channelName, id);
-      setDealState(updated);
+      setDealState(await resolveObjection(channelName, id));
     } catch (e) {
       console.error('Failed to resolve objection:', e);
     }
   };
 
+  const transcript = dealState.transcript.map(t => ({ role: t.role as any, text: t.content, timestamp: t.timestamp }));
+
   return (
     <div className="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
-      {/* Top Navigation */}
       <Navbar
         agoraConfig={agoraConfig}
         isConnected={isConnected}
@@ -392,94 +342,88 @@ export const App: React.FC = () => {
         onOpenEmailModal={() => setIsEmailModalOpen(true)}
       />
 
-      {/* Main Dashboard Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Task 9.5: Prominent Outcome Banner */}
-        <OutcomeBanner dealState={dealState} onReset={handleResetSession} />
+        {!channelName ? (
+          <p className="editorial-mono py-24 text-center text-xs uppercase tracking-[.14em] text-[#696862]">
+            {sessionError || 'Starting your private session…'}
+          </p>
+        ) : (
+          <>
+            <OutcomeBanner dealState={dealState} onReset={handleResetSession} />
 
-        {/* Voice Call HUD and live automation orbit - rendered in Live Sales Cockpit and Scripted Demo Harness */}
-        {(activeTab === 'cockpit' || activeTab === 'scenario') && (
-          <div className={activeTab === 'cockpit' ? 'reference-hero' : 'relative'}>
-            <VoiceCallHud
-              channelName={channelName}
-              setChannelName={setChannelName}
-              isConnected={isConnected}
-              isConnecting={isConnecting}
-              isMuted={isMuted}
-              onToggleConnect={handleToggleConnect}
-              onToggleMute={handleToggleMute}
-              localVolume={localVolume}
-              remoteVolume={remoteVolume}
-              agentStatus={agentStatus}
-            />
-            {activeTab === 'cockpit' && <ActionItemsPanel dealState={dealState} hero />}
-          </div>
-        )}
-
-        {/* Tab 1: Live Sales Cockpit */}
-        {activeTab === 'cockpit' && (
-          <div className="space-y-6">
-            {/* Live Diarized Audio Transcript & Real-Time Objection Battlecards Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7">
-                <LiveTranscriptStream transcript={dealState.transcript.map(t => ({ role: t.role as any, text: t.content, timestamp: t.timestamp }))} />
-              </div>
-              <div className="lg:col-span-5">
-                <ObjectionBattlecards
-                  activeObjections={dealState.active_objections}
-                  resolvedObjections={dealState.resolved_objections}
-                  onResolve={handleResolveObjection}
+            {(activeTab === 'cockpit' || activeTab === 'scenario') && (
+              <div className={activeTab === 'cockpit' ? 'reference-hero' : 'relative'}>
+                <VoiceCallHud
+                  channelName={channelName}
+                  setChannelName={() => {}}
+                  isConnected={isConnected}
+                  isConnecting={isConnecting}
+                  isMuted={isMuted}
+                  onToggleConnect={handleToggleConnect}
+                  onToggleMute={handleToggleMute}
+                  localVolume={localVolume}
+                  remoteVolume={remoteVolume}
+                  agentStatus={agentStatus}
+                  sentiment={dealState.sentiment}
                 />
+                {activeTab === 'cockpit' && <ActionItemsPanel dealState={dealState} hero />}
               </div>
-            </div>
+            )}
 
-            {/* Deal Stage Progression & BANT Scorecard */}
-            <DealStagePipeline dealState={dealState} />
-
-            {/* Sandbox Tester */}
-            <SandboxTester channelName={channelName} />
-          </div>
-        )}
-
-        {/* Tab 2: Scripted Demo Scenario Harness */}
-        {activeTab === 'scenario' && (
-          <div className="space-y-6">
-            <ScriptedDemoHarness
-              channelName={channelName}
-              onTurnComplete={() => fetchDealState(channelName).then(setDealState)}
-            />
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7">
-                <LiveTranscriptStream transcript={dealState.transcript.map(t => ({ role: t.role as any, text: t.content, timestamp: t.timestamp }))} />
+            {activeTab === 'cockpit' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  <div className="lg:col-span-7">
+                    <LiveTranscriptStream transcript={transcript} />
+                  </div>
+                  <div className="lg:col-span-5">
+                    <ObjectionBattlecards
+                      activeObjections={dealState.active_objections}
+                      resolvedObjections={dealState.resolved_objections}
+                      onResolve={handleResolveObjection}
+                    />
+                  </div>
+                </div>
+                <DealStagePipeline dealState={dealState} />
+                <SandboxTester channelName={channelName} />
               </div>
-              <div className="lg:col-span-5">
-                <ObjectionBattlecards
-                  activeObjections={dealState.active_objections}
-                  resolvedObjections={dealState.resolved_objections}
-                  onResolve={handleResolveObjection}
+            )}
+
+            {activeTab === 'scenario' && (
+              <div className="space-y-6">
+                <ScriptedDemoHarness
+                  channelName={channelName}
+                  onTurnComplete={() => fetchDealState(channelName).then(setDealState).catch(() => {})}
+                  onReset={handleResetSession}
                 />
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  <div className="lg:col-span-7">
+                    <LiveTranscriptStream transcript={transcript} />
+                  </div>
+                  <div className="lg:col-span-5">
+                    <ObjectionBattlecards
+                      activeObjections={dealState.active_objections}
+                      resolvedObjections={dealState.resolved_objections}
+                      onResolve={handleResolveObjection}
+                    />
+                  </div>
+                </div>
+                <DealStagePipeline dealState={dealState} />
               </div>
-            </div>
-            <DealStagePipeline dealState={dealState} />
-          </div>
-        )}
+            )}
 
-        {/* Tab 3: Analytics & Observability */}
-        {activeTab === 'analytics' && (
-          <div className="space-y-6">
-            <AnalyticsDashboard dealState={dealState} />
-            <ActionItemsPanel dealState={dealState} />
-          </div>
+            {activeTab === 'analytics' && (
+              <div className="space-y-6">
+                <AnalyticsDashboard dealState={dealState} />
+                <ActionItemsPanel dealState={dealState} />
+              </div>
+            )}
+          </>
         )}
       </main>
 
-      {/* RAG Knowledge Base Modal */}
-      <KnowledgeBaseModal
-        isOpen={isKnowledgeOpen}
-        onClose={() => setIsKnowledgeOpen(false)}
-      />
+      <KnowledgeBaseModal isOpen={isKnowledgeOpen} onClose={() => setIsKnowledgeOpen(false)} />
 
-      {/* Entry Email Capture & Notification Preferences Modal */}
       <EmailCaptureModal
         isOpen={isEmailModalOpen}
         onClose={() => setIsEmailModalOpen(false)}

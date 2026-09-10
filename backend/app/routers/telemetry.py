@@ -1,8 +1,9 @@
 import json
 import logging
-from typing import Dict, Set
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from typing import Dict, Optional, Set
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from app.core.deal_state_engine import deal_state_engine
+from app.core.security import parse_session_token
 from app.scripts.ingest_docs import DOCUMENTS_SOURCE
 
 logger = logging.getLogger("lively.telemetry")
@@ -29,24 +30,25 @@ class ConnectionManager:
         if channel_name in self.active_connections:
             data_str = json.dumps(payload)
             dead = set()
-            for ws in self.active_connections[channel_name]:
+            for ws in list(self.active_connections[channel_name]):
                 try:
                     await ws.send_text(data_str)
                 except Exception:
                     dead.add(ws)
             for ws in dead:
-                self.active_connections[channel_name].discard(ws)
+                self.active_connections.get(channel_name, set()).discard(ws)
 
 ws_manager = ConnectionManager()
 
 @router.websocket("/ws/telemetry/{channel_name}")
-async def websocket_telemetry_endpoint(websocket: WebSocket, channel_name: str):
+async def websocket_telemetry_endpoint(websocket: WebSocket, channel_name: str, token: Optional[str] = Query(default=None)):
+    # Browsers can't set headers on WebSockets, so the session token travels as ?token=
+    if parse_session_token(token) != channel_name:
+        await websocket.close(code=4401)
+        return
     await ws_manager.connect(channel_name, websocket)
     initial_state = deal_state_engine.get_or_create(channel_name)
-    await websocket.send_text(json.dumps({
-        "type": "DEAL_STATE_SNAPSHOT",
-        "data": initial_state.model_dump()
-    }))
+    await websocket.send_text(json.dumps({"type": "DEAL_STATE_SNAPSHOT", "data": initial_state.model_dump()}))
 
     try:
         while True:
@@ -58,13 +60,8 @@ async def websocket_telemetry_endpoint(websocket: WebSocket, channel_name: str):
             elif action == "RESOLVE_OBJECTION":
                 obj_id = msg.get("objection_id")
                 if obj_id:
-                    deal_state_engine.resolve_objection(channel_name, obj_id)
-                    updated = deal_state_engine.get_state(channel_name)
-                    if updated:
-                        await ws_manager.broadcast_state(channel_name, {
-                            "type": "DEAL_STATE_UPDATE",
-                            "data": updated.model_dump()
-                        })
+                    updated = deal_state_engine.resolve_objection(channel_name, obj_id)
+                    await ws_manager.broadcast_state(channel_name, {"type": "DEAL_STATE_UPDATE", "data": updated.model_dump()})
     except WebSocketDisconnect:
         ws_manager.disconnect(channel_name, websocket)
     except Exception as e:
@@ -74,13 +71,13 @@ async def websocket_telemetry_endpoint(websocket: WebSocket, channel_name: str):
 @router.get("/telemetry/latency-stats")
 async def get_latency_stats():
     """
-    Task 5.3: Returns real-time latency analytics (TTFT p50/p95, model distribution) for hackathon evidence.
+    Task 5.3: Measured latency (TTFT p50/p95, model distribution). Values are null until turns are measured.
     """
     from app.core.llm_router import latency_tracker
-    return {
-        "status": "success",
-        "data": latency_tracker.get_stats()
-    }
+    from app.core.understanding import llm_understanding
+    stats = latency_tracker.get_stats()
+    stats["understanding"] = {"mode": "llm" if llm_understanding.client else "rules", **llm_understanding.stats}
+    return {"status": "success", "data": stats}
 
 @router.get("/knowledge")
 async def get_knowledge_base():

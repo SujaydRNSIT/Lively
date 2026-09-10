@@ -58,9 +58,9 @@ GROQ_MODEL=llama-3.3-70b-versatile
 NVIDIA_NIM_API_KEY=nvapi-...               # Secondary / complex reasoning & failover
 NVIDIA_NIM_MODEL=meta/llama-3.1-70b-instruct
 
-# Application Secrets
-LIVELY_API_KEY=lively-session-secret-key-2026
-LIVELY_LLM_SHARED_SECRET=lively-custom-llm-secret-9988
+# Application Secrets (generate each with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+LIVELY_LLM_SHARED_SECRET=<random>   # Agora presents this to /v1/chat/completions
+SESSION_SECRET=<random>             # signs per-visitor session tokens
 
 # Server Port
 HOST=0.0.0.0

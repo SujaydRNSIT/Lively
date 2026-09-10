@@ -1,6 +1,8 @@
 import logging
-from fastapi import APIRouter
+from typing import Optional
+from fastapi import APIRouter, Header
 from app.config import settings
+from app.core.security import require_channel_access
 from app.models.schemas import RtcTokenRequest, RtcTokenResponse
 from app.services.agora_token import build_rtc_token
 
@@ -9,11 +11,15 @@ router = APIRouter(prefix="/api", tags=["rtc_token"])
 
 @router.post("/rtc-token", response_model=RtcTokenResponse)
 @router.post("/agora/token", response_model=RtcTokenResponse)
-async def generate_rtc_token(req: RtcTokenRequest):
+async def generate_rtc_token(
+    req: RtcTokenRequest,
+    x_lively_session: Optional[str] = Header(default=None, alias="X-Lively-Session")
+):
     """
-    Task 3.1: Given channel_name and uid, generate and return a short-lived Agora RTC token
-    using App ID + App Certificate. The frontend calls this before joining a channel.
+    Task 3.1: Given channel_name and uid, generate a short-lived Agora RTC token.
+    Only issued for the caller's own channel, so nobody can mint a token to join someone else's call.
     """
+    require_channel_access(req.channel_name, x_lively_session)
     token = build_rtc_token(
         app_id=settings.AGORA_APP_ID,
         app_cert=settings.AGORA_APP_CERTIFICATE,

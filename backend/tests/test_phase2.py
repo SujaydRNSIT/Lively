@@ -3,13 +3,14 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.config import settings
-from app.models.schemas import DealState, Lead, BANTStatus
+from app.models.schemas import DealState
 from app.core.deal_state_engine import deal_state_engine
 from app.core.rag import rag_core
 from app.core.decision import decision_engine
 from app.core.tools_impl.crm import sync_crm_deal
 from app.core.tools_impl.calendar import book_calendar_slot
 from app.core.tools_impl.escalation import trigger_human_escalation
+from tests.helpers import new_session
 
 def test_config():
     assert settings.PROJECT_NAME is not None
@@ -48,33 +49,30 @@ async def test_tools():
 async def test_api_endpoints():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        # Root & Health
         r = await ac.get("/health")
         assert r.status_code == 200
 
-        # RTC Token
-        r = await ac.post("/api/agora/token", json={"channel_name": "room1", "uid": 1001})
+        channel, headers = await new_session(ac)
+
+        r = await ac.post("/api/agora/token", json={"channel_name": channel, "uid": 1001}, headers=headers)
         assert r.status_code == 200
         assert "token" in r.json()
 
-        # Deal State
-        r = await ac.get("/api/deal-state/room1")
+        r = await ac.get(f"/api/deal-state/{channel}", headers=headers)
         assert r.status_code == 200
-        assert r.json()["data"]["channel_name"] == "room1"
+        assert r.json()["data"]["channel_name"] == channel
 
-        # Tools Webhooks
         r = await ac.post("/api/tools/book-demo", json={
-            "channel_name": "room1",
+            "channel_name": channel,
             "time_slot": "Next Monday 10am",
             "email": "lead@test.com"
-        })
+        }, headers=headers)
         assert r.status_code == 200
 
-        # OpenAI Chat Completions Proxy
-        r = await ac.post("/v1/chat/completions?channel=room1", json={
+        r = await ac.post("/v1/chat/completions", json={
             "messages": [{"role": "user", "content": "How much does Lively cost?"}],
             "stream": True
-        })
+        }, headers=headers)
         assert r.status_code == 200
         assert "text/event-stream" in r.headers["content-type"]
 
