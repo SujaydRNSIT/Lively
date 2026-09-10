@@ -58,3 +58,14 @@ async def reset_channel_deal_state(channel_name: str):
     new_state = deal_state_engine.reset_state(channel_name)
     await ws_manager.broadcast_state(channel_name, {"type": "DEAL_STATE_UPDATE", "data": new_state.model_dump()})
     return {"status": "success", "data": new_state.model_dump()}
+
+@router.post("/{channel_name}/call-end")
+async def mark_call_ended(channel_name: str):
+    """
+    Signals that the voice call has ended.
+    Triggers background follow-up email draft generation (Feature D).
+    """
+    # Sending the special sentinel text triggers _generate_follow_up in the engine
+    deal_state_engine.record_turn(channel_name, role="system", text="[CALL_ENDED]")
+    state = deal_state_engine.get_or_create(channel_name)
+    return {"status": "success", "message": "Follow-up draft generation started", "data": state.model_dump()}

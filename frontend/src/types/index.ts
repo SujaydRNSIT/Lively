@@ -145,6 +145,41 @@ export interface DealState {
   next_best_action: string;
   change_log: ChangeLogEntry[];
   transcript: ChatTurn[];
+  /** Feature A: agent decision trace — updated after every buyer turn */
+  agent_reasoning?: {
+    heard:     string;
+    decided:   string;
+    did:       string[];
+    result:    string;
+    sentiment: string;
+    provider:  string;
+  } | null;
+  /** Feature B: most recent deal desk concession record */
+  deal_desk?: {
+    id:                        string;
+    proposed_pct:              number;
+    authorised_pct:            number;
+    status:                    'approved' | 'pending_manager' | 'refused' | 'expired';
+    reason:                    string;
+    trade:                     string | null;
+    manager_approval_required: boolean;
+    approved_by?:              string | null;
+    label:                     string;
+    bound_by:                  string;
+    channel_name:              string;
+    expires_at:                number;
+  } | null;
+  /** Feature D: post-call follow-up email draft */
+  follow_up_draft?: {
+    subject:      string;
+    body:         string;
+    to_email:     string;
+    generated_at: number;
+    source:       'llm' | 'template';
+    sent?:        boolean;
+    sent_to?:     string;
+    sent_at?:     number;
+  } | null;
   created_at: number;
   updated_at: number;
 }

@@ -74,6 +74,38 @@ OPENAI_TOOL_DEFINITIONS = [
                 "required": ["reason"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_concession",
+            "description": (
+                "Propose a discount or concession to the Deal Desk for authorisation. "
+                "The LLM PROPOSES; the policy engine DECIDES. "
+                "The result tells you the authorised percentage (which may be lower than proposed) "
+                "and whether manager approval is required. "
+                "Only call this when the buyer explicitly negotiates on price or asks for a discount."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "percentage": {
+                        "type": "number",
+                        "description": "Discount percentage being proposed (e.g. 20 for 20%)"
+                    },
+                    "trade": {
+                        "type": "string",
+                        "enum": ["annual", "case_study", "seats", "none"],
+                        "description": "Commitment trade offered in return for the discount"
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Why this concession makes sense for this deal"
+                    }
+                },
+                "required": ["percentage"]
+            }
+        }
     }
 ]
 
@@ -123,5 +155,33 @@ async def execute_openai_tool_call(
             arguments.get("urgency", "Immediate"),
             trigger="tool",
         )
+
+    if tool_name == "propose_concession":
+        from app.core.deal_desk import deal_desk
+        from app.routers.telemetry import ws_manager
+
+        pct   = float(arguments.get("percentage", 0))
+        trade = arguments.get("trade") or None
+        if trade == "none":
+            trade = None
+
+        rec = deal_desk.propose(channel_name, pct, trade)
+
+        # Store the latest concession in deal state so the UI can render it
+        if deal_state is not None:
+            deal_state.deal_desk = rec.to_dict()
+
+        # Broadcast so the DealDeskPanel updates in real time
+        from app.core.background import spawn
+        spawn(ws_manager.broadcast_state, channel_name, {
+            "type": "DEAL_DESK_UPDATE",
+            "data": rec.to_dict(),
+        })
+
+        logger.info(
+            f"[DealDesk] Tool result: proposed={pct}% → authorised={rec.authorised_pct}% "
+            f"status={rec.status} label={rec.to_dict()['label']}"
+        )
+        return rec.to_dict()
 
     return {"status": "error", "message": f"Unknown tool: {tool_name}"}

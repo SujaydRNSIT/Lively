@@ -11,6 +11,9 @@ import { ScriptedDemoHarness } from './components/ScriptedDemoHarness';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
 import { EmailCaptureModal } from './components/EmailCaptureModal';
+import { ReasoningTrace } from './components/ReasoningTrace';
+import { DealDeskPanel } from './components/DealDeskPanel';
+import { SmartDialerPanel } from './components/SmartDialerPanel';
 import { AgoraVoiceManager } from './services/agoraRtc';
 import {
   ensureSession,
@@ -24,6 +27,7 @@ import {
   resolveObjection,
   setUserContact,
   resetDealState,
+  triggerCallEnd,
 } from './services/api';
 import { DealState, AgoraConfig } from './types';
 
@@ -90,7 +94,12 @@ export const App: React.FC = () => {
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [agoraConfig, setAgoraConfig] = useState<AgoraConfig | null>(null);
   const [dealState, setDealState] = useState<DealState>(INITIAL_DEAL_STATE);
-  const [activeTab, setActiveTab] = useState<'cockpit' | 'scenario' | 'analytics'>('cockpit');
+  const [activeTab, setActiveTab] = useState<'cockpit' | 'scenario' | 'analytics' | 'dialer'>('cockpit');
+
+  // Feature A: agent decision trace
+  const [agentReasoning, setAgentReasoning] = useState<any | null>(null);
+  // Feature B: deal desk concession
+  const [latestConcession, setLatestConcession] = useState<any | null>(null);
 
   // Voice call states
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -241,11 +250,20 @@ export const App: React.FC = () => {
             if (!isMounted) return;
             if (msg.type === 'DEAL_STATE_SNAPSHOT' || msg.type === 'DEAL_STATE_UPDATE') {
               setDealState(msg.data);
+              // Sync deal desk concession from full state update
+              if (msg.data.deal_desk) setLatestConcession(msg.data.deal_desk);
+              // Sync follow-up draft is part of dealState already
             } else if (msg.type === 'AGENT_STATUS') {
               setAgentStatus(msg.data.status);
             } else if (msg.type === 'TRANSCRIPT_TURN') {
               setAgentStatus(msg.data.role === 'agent' ? 'speaking' : 'listening');
               if (msg.data.deal_state) setDealState(msg.data.deal_state);
+            } else if (msg.type === 'AGENT_REASONING') {
+              // Feature A: update the decision trace panel
+              setAgentReasoning(msg.data);
+            } else if (msg.type === 'DEAL_DESK_UPDATE') {
+              // Feature B: update the deal desk panel
+              setLatestConcession(msg.data);
             }
           } catch (e) {
             console.error('WS parse error:', e);
@@ -275,6 +293,8 @@ export const App: React.FC = () => {
       }
       setIsConnected(false);
       setAgentStatus('idle');
+      // Feature D: signal call-end to generate follow-up draft
+      if (channelName) triggerCallEnd(channelName).catch(() => {});
       return;
     }
 
@@ -373,14 +393,22 @@ export const App: React.FC = () => {
             {activeTab === 'cockpit' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-7">
+                  <div className="lg:col-span-7 space-y-6">
                     <LiveTranscriptStream transcript={transcript} />
+                    {/* Feature A: Agent Decision Trace */}
+                    <ReasoningTrace reasoning={agentReasoning} />
                   </div>
-                  <div className="lg:col-span-5">
+                  <div className="lg:col-span-5 space-y-6">
                     <ObjectionBattlecards
                       activeObjections={dealState.active_objections}
                       resolvedObjections={dealState.resolved_objections}
                       onResolve={handleResolveObjection}
+                    />
+                    {/* Feature B: Deal Desk Negotiation Engine */}
+                    <DealDeskPanel
+                      channelName={channelName}
+                      concession={latestConcession}
+                      onUpdate={rec => setLatestConcession(rec)}
                     />
                   </div>
                 </div>
@@ -416,6 +444,13 @@ export const App: React.FC = () => {
               <div className="space-y-6">
                 <AnalyticsDashboard dealState={dealState} />
                 <ActionItemsPanel dealState={dealState} />
+              </div>
+            )}
+
+            {/* Feature C: SmartDialer tab */}
+            {activeTab === 'dialer' && (
+              <div className="space-y-6">
+                <SmartDialerPanel />
               </div>
             )}
           </>
