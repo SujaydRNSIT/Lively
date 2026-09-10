@@ -27,30 +27,30 @@ interface DealDeskPanelProps {
 const STATUS_CONFIG: Record<string, { icon: React.FC<any>; color: string; bg: string; border: string; label: string }> = {
   approved: {
     icon:   CheckCircle2,
-    color:  '#10b981',
-    bg:     'bg-emerald-50 dark:bg-emerald-950/20',
-    border: 'border-emerald-300/60 dark:border-emerald-700/40',
+    color:  '#20201e',
+    bg:     'bg-[#f0efea] dark:bg-[#1a1c24]',
+    border: 'border-[#d7d5ce] dark:border-[#2a2e3d]',
     label:  'Approved',
   },
   pending_manager: {
     icon:   Clock,
-    color:  '#f59e0b',
-    bg:     'bg-amber-50 dark:bg-amber-950/20',
-    border: 'border-amber-300/60 dark:border-amber-700/40',
+    color:  '#52525b',
+    bg:     'bg-[#f7f6f2] dark:bg-[#161822]',
+    border: 'border-[#e5e4de] dark:border-[#262a38]',
     label:  'Manager Approval Required',
   },
   refused: {
     icon:   XCircle,
-    color:  '#ef4444',
-    bg:     'bg-red-50 dark:bg-red-950/20',
-    border: 'border-red-300/60 dark:border-red-700/40',
+    color:  '#71717a',
+    bg:     'bg-[#f7f6f2] dark:bg-[#161822]',
+    border: 'border-[#e5e4de] dark:border-[#262a38]',
     label:  'Refused',
   },
   expired: {
     icon:   XCircle,
-    color:  '#6b7280',
-    bg:     'bg-gray-50 dark:bg-gray-900/20',
-    border: 'border-gray-300/60 dark:border-gray-700/40',
+    color:  '#8c8a82',
+    bg:     'bg-[#f7f6f2] dark:bg-[#161822]',
+    border: 'border-[#e5e4de] dark:border-[#262a38]',
     label:  'Expired',
   },
 };
@@ -83,7 +83,7 @@ const DiscountBar: React.FC<{ proposed: number; authorised: number; status: stri
           className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
           style={{
             width:      `${proposedW}%`,
-            background: 'linear-gradient(90deg, #6166cf40, #6166cf70)',
+            background: 'linear-gradient(90deg, rgba(32,32,30,0.3), rgba(32,32,30,0.6))',
           }}
         />
         {/* Authorised bar */}
@@ -101,7 +101,7 @@ const DiscountBar: React.FC<{ proposed: number; authorised: number; status: stri
       </div>
       <div className="flex items-center gap-4 text-[10px] text-[#696862] dark:text-[#9aa0ad]">
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2.5 h-1.5 rounded-sm bg-[#6166cf40]" />
+          <span className="inline-block w-2.5 h-1.5 rounded-sm bg-[#20201e]/40 dark:bg-white/40" />
           Proposed {proposed}%
         </span>
         {status !== 'refused' && (
@@ -142,7 +142,7 @@ const ProposeSandbox: React.FC<{
   };
 
   return (
-    <div className="mt-4 rounded-xl border hairline bg-[#f7f6f2] dark:bg-[#0f1118] p-4 space-y-3">
+    <div className="mt-4 rounded-xl border hairline bg-[#f7f6f2] dark:bg-[#141416] p-4 space-y-3">
       <p className="text-[9.5px] editorial-mono uppercase tracking-[.16em] text-[#8c8a82]">
         Sandbox — propose a concession
       </p>
@@ -156,46 +156,50 @@ const ProposeSandbox: React.FC<{
               min={5} max={30} step={1}
               value={pct}
               onChange={e => setPct(Number(e.target.value))}
-              className="w-24 accent-[#6166cf]"
+              className="w-24 accent-[#20201e] dark:accent-[#e8e6e1]"
             />
-            <span className="w-8 text-center text-xs font-bold text-[#20201e] dark:text-[#e8e6e1]">{pct}%</span>
+            <span className="text-xs font-bold text-[#20201e] dark:text-[#e8e6e1] w-8">{pct}%</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-[#55544e] dark:text-[#a09e97]">Trade</label>
+          <label className="text-xs text-[#55544e] dark:text-[#a09e97]">Trade requested</label>
           <select
             id="deal-desk-trade"
             value={trade}
             onChange={e => setTrade(e.target.value)}
-            className="text-xs rounded-lg border hairline bg-white dark:bg-[#151926] text-[#20201e] dark:text-[#e8e6e1] px-2 py-1"
+            className="px-2.5 py-1 rounded-lg border hairline text-xs bg-white dark:bg-[#18191e] text-[#20201e] dark:text-[#e8e6e1]"
           >
             <option value="none">None</option>
-            <option value="annual">Annual billing</option>
-            <option value="case_study">Reference customer</option>
-            <option value="seats">Seat upgrade</option>
+            {Object.entries(TRADE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
           </select>
         </div>
         <button
           id="deal-desk-propose-btn"
           onClick={handlePropose}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6166cf] hover:bg-[#5257be] text-white text-[11px] font-semibold uppercase tracking-[.08em] transition disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#18191e] hover:bg-[#f0efea] dark:hover:bg-[#20222a] text-xs font-medium text-[#20201e] dark:text-[#e8e6e1] transition disabled:opacity-50 cursor-pointer"
         >
           <Scale size={12} />
-          {busy ? 'Routing…' : 'Submit to Deal Desk'}
+          {busy ? 'Calculating…' : 'Calculate & Propose'}
         </button>
       </div>
-      {error && <p className="text-[11px] text-red-500">{error}</p>}
+      {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
     </div>
   );
 };
 
-export const DealDeskPanel: React.FC<DealDeskPanelProps> = ({ channelName, concession, onUpdate }) => {
+export const DealDeskPanel: React.FC<DealDeskPanelProps> = ({
+  channelName,
+  concession,
+  onUpdate,
+}) => {
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleApprove = async () => {
-    if (!concession?.id) return;
+    if (!concession) return;
     setBusy(true);
     setError(null);
     try {
@@ -211,15 +215,15 @@ export const DealDeskPanel: React.FC<DealDeskPanelProps> = ({ channelName, conce
   const cfg = concession ? STATUS_CONFIG[concession.status] ?? STATUS_CONFIG.refused : null;
 
   return (
-    <div className="rounded-2xl border hairline bg-white dark:bg-[#0f1118] shadow-sm overflow-hidden">
+    <div className="rounded-2xl border hairline bg-white dark:bg-[#141416] shadow-sm overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b hairline">
         <div className="flex items-center gap-2">
-          <Scale size={14} className="text-[#6166cf]" />
+          <Scale size={14} className="text-[#20201e] dark:text-[#e8e6e1]" />
           <span className="text-[10px] editorial-mono uppercase tracking-[.18em] text-[#696862] dark:text-[#9aa0ad] font-semibold">
             Deal Desk
           </span>
-          <span className="text-[9px] editorial-mono px-1.5 py-0.5 rounded bg-[#f0efea] dark:bg-[#1a1d2a] text-[#8c8a82]">
+          <span className="text-[9px] editorial-mono px-1.5 py-0.5 rounded bg-[#f0efea] dark:bg-[#1a1b22] text-[#8c8a82]">
             LLM proposes · Policy decides
           </span>
         </div>
@@ -253,7 +257,7 @@ export const DealDeskPanel: React.FC<DealDeskPanelProps> = ({ channelName, conce
                 {concession.label}
               </p>
               <p className="mt-1 text-[10.5px] text-[#696862] dark:text-[#9aa0ad] flex items-start gap-1.5">
-                <Shield size={11} className="shrink-0 mt-0.5 text-[#6166cf]" />
+                <Shield size={11} className="shrink-0 mt-0.5 text-[#20201e] dark:text-[#e8e6e1]" />
                 Bound by: {concession.bound_by}
               </p>
             </div>
@@ -268,7 +272,7 @@ export const DealDeskPanel: React.FC<DealDeskPanelProps> = ({ channelName, conce
             {/* Trade commitment */}
             {concession.trade && (
               <div className="mt-3 flex items-start gap-2 text-[11px] text-[#696862] dark:text-[#9aa0ad]">
-                <TrendingDown size={13} className="shrink-0 mt-0.5 text-[#6166cf]" />
+                <TrendingDown size={13} className="shrink-0 mt-0.5 text-[#20201e] dark:text-[#e8e6e1]" />
                 <span>Trade committed: <strong className="text-[#20201e] dark:text-[#e8e6e1]">{TRADE_LABELS[concession.trade] ?? concession.trade}</strong></span>
               </div>
             )}

@@ -49,14 +49,14 @@ export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset
     : `Closed at ${dealState.budget || 'an agreed value'}.`;
 
   return (
-    <aside className="border-y border-[#6166cf] py-5 space-y-4">
+    <aside className="border-y border-[#20201e] dark:border-neutral-700 py-5 space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="editorial-mono text-[10px] uppercase tracking-[.15em] text-[#6166cf] flex flex-wrap items-center gap-1.5">
+          <p className="editorial-mono text-[10px] uppercase tracking-[.15em] text-[#20201e] dark:text-[#f1f0ea] flex flex-wrap items-center gap-1.5">
             <CheckCircle2 className="h-3 w-3" />
             <span>{outcomes.length > 1 ? 'Outcomes reached' : 'A meaningful outcome'}</span>
             {outcomes.map(o => (
-              <span key={o} className="rounded-full border border-[#6166cf]/30 px-2 py-0.5 normal-case tracking-normal">{o}</span>
+              <span key={o} className="rounded-full border border-[#20201e]/30 dark:border-white/20 px-2 py-0.5 normal-case tracking-normal">{o}</span>
             ))}
           </p>
           <h2 className="editorial-serif text-3xl mt-1">{title}</h2>
@@ -68,7 +68,7 @@ export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset
             onClick={onReset}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#151926] text-xs font-medium text-[#4c4b46] dark:text-[#d1d5db] hover:bg-[#f3f2eb] dark:hover:bg-[#1e2436] transition cursor-pointer"
           >
-            <RotateCcw size={13} className="text-[#6166cf]" />
+            <RotateCcw size={13} className="text-[#20201e] dark:text-[#e8e6e1]" />
             <span>Start Fresh Call</span>
           </button>
         )}
@@ -79,10 +79,10 @@ export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset
 
       {/* Feature D: Post-Call Follow-Up Draft */}
       {followUp && !followUp.sent && (
-        <div className="rounded-2xl border border-[#6166cf]/30 bg-[#f7f6f2] dark:bg-[#0f1118] p-5 space-y-3">
+        <div className="rounded-2xl border border-[#20201e]/20 dark:border-white/10 bg-[#f7f6f2] dark:bg-[#0f1118] p-5 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Mail size={14} className="text-[#6166cf]" />
+              <Mail size={14} className="text-[#20201e] dark:text-[#e8e6e1]" />
               <span className="text-[10px] editorial-mono uppercase tracking-[.16em] text-[#696862] dark:text-[#9aa0ad] font-semibold">
                 Post-Call Follow-Up Draft
               </span>
@@ -128,7 +128,7 @@ export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset
                 }
               }}
               disabled={sendBusy}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#6166cf] hover:bg-[#5257be] text-white text-[11px] font-semibold uppercase tracking-[.08em] transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#141416] hover:bg-[#222227] text-white dark:bg-[#18191e] dark:hover:bg-[#252730] dark:text-[#f4f3ef] border border-black/20 dark:border-white/15 text-[11px] font-semibold uppercase tracking-[.08em] transition shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               {sendBusy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
               {sendBusy ? 'Sending…' : 'Send'}

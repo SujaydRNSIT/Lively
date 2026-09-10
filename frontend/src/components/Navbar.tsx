@@ -50,7 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               title={userEmail ? `Notification email: ${userEmail} (click to update)` : 'Click to set notification email'}
               className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border hairline bg-[#f4f3ed] dark:bg-[#151926] hover:bg-[#eae8e0] dark:hover:bg-[#1e2436] text-[10px] editorial-mono uppercase tracking-[.12em] text-[#55544e] dark:text-[#9aa0ad] transition cursor-pointer"
             >
-              <Mail size={11} className="text-[#6166cf]" />
+              <Mail size={11} className="text-[#20201e] dark:text-[#e8e6e1]" />
               <span className="max-w-[150px] truncate">{userEmail || 'Set Email'}</span>
             </button>
           )}
@@ -75,16 +75,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             {theme === 'dark' ? (
               <Sun size={15} className="text-[#f59e0b] group-hover:rotate-45 transition-transform duration-300" />
             ) : (
-              <Moon size={15} className="text-[#6166cf] group-hover:-rotate-12 transition-transform duration-300" />
+              <Moon size={15} className="text-[#20201e] group-hover:-rotate-12 transition-transform duration-300" />
             )}
           </button>
 
           {/* Playbook button */}
           <button
             onClick={onOpenKnowledge}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-lg border hairline bg-white dark:bg-[#151926] hover:bg-[#f5f4ee] dark:hover:bg-[#1e2436] text-xs font-medium text-[#292927] dark:text-[#e8e6e1] transition shadow-2xs cursor-pointer"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-lg border hairline bg-white dark:bg-[#151926] hover:bg-[#f5f4ee] dark:hover:bg-[#1e2436] text-xs font-medium text-[#20201e] dark:text-[#e8e6e1] transition shadow-2xs cursor-pointer"
           >
-            <BookOpen size={13} className="text-[#6166cf]" />
+            <BookOpen size={13} className="text-[#20201e] dark:text-[#e8e6e1]" />
             <span>Playbook</span>
           </button>
         </div>
@@ -102,10 +102,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               : 'text-[#77756e] dark:text-[#828896] hover:text-[#20201e] dark:hover:text-[#f1f0ea]'
           }`}
         >
-          <LayoutDashboard className={`w-3.5 h-3.5 transition ${activeTab === 'cockpit' ? 'text-[#6166cf]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
+          <LayoutDashboard className={`w-3.5 h-3.5 transition ${activeTab === 'cockpit' ? 'text-[#20201e] dark:text-[#f1f0ea]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
           <span>Live Sales Cockpit</span>
           {activeTab === 'cockpit' && (
-            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#6166cf] rounded-full" />
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#20201e] dark:bg-[#f1f0ea] rounded-full" />
           )}
         </button>
 
@@ -117,13 +117,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               : 'text-[#77756e] dark:text-[#828896] hover:text-[#20201e] dark:hover:text-[#f1f0ea]'
           }`}
         >
-          <PlaySquare className={`w-3.5 h-3.5 transition ${activeTab === 'scenario' ? 'text-[#6166cf]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
+          <PlaySquare className={`w-3.5 h-3.5 transition ${activeTab === 'scenario' ? 'text-[#20201e] dark:text-[#f1f0ea]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
           <span>Scripted Demo Harness</span>
           <span className="ml-1 px-1.5 py-0.5 rounded text-[8.5px] editorial-mono tracking-normal bg-[#eceae2] dark:bg-[#1e2436] text-[#696862] dark:text-[#9aa0ad] font-medium">
             HACKATHON
           </span>
           {activeTab === 'scenario' && (
-            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#6166cf] rounded-full" />
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#20201e] dark:bg-[#f1f0ea] rounded-full" />
           )}
         </button>
 
@@ -135,10 +135,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               : 'text-[#77756e] dark:text-[#828896] hover:text-[#20201e] dark:hover:text-[#f1f0ea]'
           }`}
         >
-          <BarChart3 className={`w-3.5 h-3.5 transition ${activeTab === 'analytics' ? 'text-[#6166cf]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
+          <BarChart3 className={`w-3.5 h-3.5 transition ${activeTab === 'analytics' ? 'text-[#20201e] dark:text-[#f1f0ea]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
           <span>Telemetry &amp; Latency Observability</span>
           {activeTab === 'analytics' && (
-            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#6166cf] rounded-full" />
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#20201e] dark:bg-[#f1f0ea] rounded-full" />
           )}
         </button>
 
@@ -150,13 +150,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               : 'text-[#77756e] dark:text-[#828896] hover:text-[#20201e] dark:hover:text-[#f1f0ea]'
           }`}
         >
-          <Phone className={`w-3.5 h-3.5 transition ${activeTab === 'dialer' ? 'text-[#6166cf]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
+          <Phone className={`w-3.5 h-3.5 transition ${activeTab === 'dialer' ? 'text-[#20201e] dark:text-[#f1f0ea]' : 'text-[#8c8a82] dark:text-[#5d6475] group-hover:text-[#20201e] dark:group-hover:text-[#f1f0ea]'}`} />
           <span>Smart Dialer</span>
           <span className="ml-1 px-1.5 py-0.5 rounded text-[8.5px] editorial-mono tracking-normal bg-[#eceae2] dark:bg-[#1e2436] text-[#696862] dark:text-[#9aa0ad] font-medium">
             NEW
           </span>
           {activeTab === 'dialer' && (
-            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#6166cf] rounded-full" />
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#20201e] dark:bg-[#f1f0ea] rounded-full" />
           )}
         </button>
       </nav>

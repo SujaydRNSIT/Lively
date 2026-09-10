@@ -26,17 +26,17 @@ export const DealStagePipeline: React.FC<{ dealState: DealState }> = ({ dealStat
       <div className="text-right">
         <p className="editorial-mono text-[10px] uppercase tracking-[.14em] text-[#696862]">Qualification {dealState.qualification_score}/100</p>
         <div className="mt-1.5 h-1.5 w-40 overflow-hidden rounded-full bg-[#e5e3dc] dark:bg-[#1e2436]">
-          <div className="h-full bg-[#6166cf] transition-all duration-500" style={{ width: `${dealState.qualification_score}%` }} />
+          <div className="h-full bg-[#20201e] dark:bg-[#e8e6e1] transition-all duration-500" style={{ width: `${dealState.qualification_score}%` }} />
         </div>
         {dealState.lead_qualified && <p className="mt-1 editorial-mono text-[10px] uppercase tracking-[.12em] text-emerald-600">Lead qualified</p>}
       </div>
     </div>
 
-    <ol className="mt-8 grid grid-cols-3 gap-y-4 sm:grid-cols-6">{stages.map(([id, name], i) => <li key={id} className="relative border-t pt-3 text-[11px] leading-4 text-[#77756e]"><i className={`absolute -top-[4px] left-0 block h-[7px] w-[7px] rounded-full ${i <= active ? 'bg-[#6166cf]' : 'bg-[#cbc9c1]'}`} /><span className={`editorial-mono block text-[10px] ${i === active ? 'text-[#292927]' : 'text-[#918f87]'}`}>0{i + 1}</span><span className={i === active ? 'font-semibold text-[#292927]' : ''}>{name}</span></li>)}</ol>
+    <ol className="mt-8 grid grid-cols-3 gap-y-4 sm:grid-cols-6">{stages.map(([id, name], i) => <li key={id} className="relative border-t pt-3 text-[11px] leading-4 text-[#77756e]"><i className={`absolute -top-[4px] left-0 block h-[7px] w-[7px] rounded-full ${i <= active ? 'bg-[#20201e] dark:bg-[#e8e6e1]' : 'bg-[#cbc9c1] dark:bg-[#383d4d]'}`} /><span className={`editorial-mono block text-[10px] ${i === active ? 'text-[#292927] dark:text-[#f1f0ea]' : 'text-[#918f87]'}`}>0{i + 1}</span><span className={i === active ? 'font-semibold text-[#292927] dark:text-[#f1f0ea]' : ''}>{name}</span></li>)}</ol>
 
     <dl className="mt-8 grid grid-cols-2 gap-x-5 gap-y-5 border-t hairline pt-5 sm:grid-cols-4">{qualification.map(([term, value, known]) => <div key={term}><dt className="editorial-mono flex items-center gap-1.5 text-[9px] uppercase tracking-[.13em] text-[#77756e]"><span className={`inline-block h-1.5 w-1.5 rounded-full ${known ? 'bg-emerald-500' : 'bg-[#cbc9c1]'}`} />{term}</dt><dd className={`mt-1 text-sm ${known ? 'text-[#292927]' : 'italic text-[#918f87]'}`}>{value}</dd></div>)}</dl>
     <dl className="mt-5 grid grid-cols-3 gap-x-5 border-t hairline pt-5">{facts.map(([term, value]) => <div key={term}><dt className="editorial-mono text-[9px] uppercase tracking-[.13em] text-[#77756e]">{term}</dt><dd className="mt-1 text-sm text-[#292927]">{value}</dd></div>)}</dl>
 
-    <div className="mt-7 border-l-2 border-[#6166cf] pl-4"><p className="editorial-mono text-[9px] uppercase tracking-[.13em] text-[#6166cf]">Next considered move</p><p className="mt-1 text-sm leading-6 text-[#3c3b37]">{dealState.next_best_action}</p></div>
+    <div className="mt-7 border-l-2 border-[#20201e] dark:border-[#e8e6e1] pl-4"><p className="editorial-mono text-[9px] uppercase tracking-[.13em] text-[#20201e] dark:text-[#f1f0ea] font-semibold">Next considered move</p><p className="mt-1 text-sm leading-6 text-[#3c3b37] dark:text-[#d1d5db]">{dealState.next_best_action}</p></div>
   </section>;
 };

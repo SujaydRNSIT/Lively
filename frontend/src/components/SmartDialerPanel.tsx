@@ -49,37 +49,37 @@ interface CampaignSnapshot {
 // Status badge helpers                                                          //
 // --------------------------------------------------------------------------- //
 
-const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  queued:          { label: 'Queued',        color: '#8c8a82', bg: 'bg-[#f0efea] dark:bg-[#1a1d2a]' },
-  dialing:         { label: 'Dialing…',      color: '#6166cf', bg: 'bg-indigo-50 dark:bg-indigo-950/30' },
-  answered_ai:     { label: 'AI Agent',      color: '#10b981', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-  answered_human:  { label: 'Human Rep',     color: '#8b5cf6', bg: 'bg-violet-50 dark:bg-violet-950/20' },
-  no_answer:       { label: 'No Answer',     color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-950/20' },
-  busy:            { label: 'Busy',          color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-950/20' },
-  dropped:         { label: 'Dropped',       color: '#ef4444', bg: 'bg-red-50 dark:bg-red-950/20' },
-  completed:       { label: 'Completed',     color: '#6b7280', bg: 'bg-gray-50 dark:bg-gray-900/20' },
+const LEAD_STATUS_CONFIG: Record<string, { label: string; textClass: string; bgClass: string }> = {
+  queued:          { label: 'Queued',        textClass: 'text-[#8c8a82] dark:text-[#a1a1aa]', bgClass: 'bg-[#f0efea] dark:bg-[#1a1b22]' },
+  dialing:         { label: 'Dialing…',      textClass: 'text-[#20201e] dark:text-[#f4f4f5]', bgClass: 'bg-neutral-100 dark:bg-neutral-800' },
+  answered_ai:     { label: 'AI Agent',      textClass: 'text-[#20201e] dark:text-[#f1f0ea]', bgClass: 'bg-[#ebe9e1] dark:bg-[#252830]' },
+  answered_human:  { label: 'Human Rep',     textClass: 'text-[#52525b] dark:text-[#d4d4d8]', bgClass: 'bg-[#f0efea] dark:bg-[#1a1b22]' },
+  no_answer:       { label: 'No Answer',     textClass: 'text-[#71717a] dark:text-[#a1a1aa]', bgClass: 'bg-[#f4f3ef] dark:bg-[#191a20]' },
+  busy:            { label: 'Busy',          textClass: 'text-[#71717a] dark:text-[#a1a1aa]', bgClass: 'bg-[#f4f3ef] dark:bg-[#191a20]' },
+  dropped:         { label: 'Dropped',       textClass: 'text-[#71717a] dark:text-[#a1a1aa]', bgClass: 'bg-[#f4f3ef] dark:bg-[#191a20]' },
+  completed:       { label: 'Completed',     textClass: 'text-[#71717a] dark:text-[#a1a1aa]', bgClass: 'bg-[#f0efea] dark:bg-[#1a1b22]' },
 };
 
-const CB_CONFIG: Record<string, { label: string; color: string }> = {
-  closed:    { label: 'Circuit Closed',    color: '#10b981' },
-  half_open: { label: 'Circuit Half-Open', color: '#f59e0b' },
-  open:      { label: 'Circuit Open ⚠️',   color: '#ef4444' },
+const CB_CONFIG: Record<string, { label: string; textClass: string; bgClass: string }> = {
+  closed:    { label: 'Circuit Closed',    textClass: 'text-[#696862] dark:text-[#a1a1aa]', bgClass: 'bg-[#f0efea] dark:bg-[#1a1c23]' },
+  half_open: { label: 'Circuit Half-Open', textClass: 'text-[#71717a] dark:text-[#d4d4d8]', bgClass: 'bg-[#f0efea] dark:bg-[#1a1c23]' },
+  open:      { label: 'Circuit Open ⚠️',   textClass: 'text-[#20201e] dark:text-[#f4f4f5]', bgClass: 'bg-[#e5e4de] dark:bg-[#252832]' },
 };
 
 // --------------------------------------------------------------------------- //
 // Sub-components                                                                //
 // --------------------------------------------------------------------------- //
 
-const StatCard: React.FC<{ label: string; value: number | string; icon: React.FC<any>; color: string; sub?: string }> = ({
-  label, value, icon: Icon, color, sub,
+const StatCard: React.FC<{ label: string; value: number | string; icon: React.FC<any>; sub?: string }> = ({
+  label, value, icon: Icon, sub,
 }) => (
-  <div className="rounded-xl border hairline bg-white dark:bg-[#0f1118] p-3.5 flex flex-col gap-1">
+  <div className="rounded-xl border hairline bg-white dark:bg-[#141416] p-3.5 flex flex-col gap-1 shadow-xs">
     <div className="flex items-center justify-between">
-      <span className="text-[9.5px] editorial-mono uppercase tracking-[.14em] text-[#8c8a82]">{label}</span>
-      <Icon size={13} style={{ color }} />
+      <span className="text-[9.5px] editorial-mono uppercase tracking-[.14em] text-[#8c8a82] dark:text-[#9aa0ad]">{label}</span>
+      <Icon size={13} className="text-[#696862] dark:text-[#a1a1aa]" />
     </div>
-    <span className="text-2xl font-bold" style={{ color }}>{value}</span>
-    {sub && <span className="text-[9.5px] text-[#a7a59d] dark:text-[#5a6175]">{sub}</span>}
+    <span className="text-2xl font-bold text-[#20201e] dark:text-[#f1f0ea]">{value}</span>
+    {sub && <span className="text-[9.5px] text-[#a7a59d] dark:text-[#71717a]">{sub}</span>}
   </div>
 );
 
@@ -88,23 +88,23 @@ const PacingBar: React.FC<{ proposed: number; authorised: number; reason?: strin
 }) => {
   const max = Math.max(proposed, 20);
   return (
-    <div className="rounded-xl border hairline bg-white dark:bg-[#0f1118] px-4 py-3 space-y-2">
-      <p className="text-[9.5px] editorial-mono uppercase tracking-[.16em] text-[#8c8a82]">
+    <div className="rounded-xl border hairline bg-white dark:bg-[#141416] px-4 py-3 space-y-2 shadow-xs">
+      <p className="text-[9.5px] editorial-mono uppercase tracking-[.16em] text-[#8c8a82] dark:text-[#9aa0ad]">
         Safety Authorisation
       </p>
       <p className="text-xs font-bold text-[#20201e] dark:text-[#f1f0ea]">
         Proposed {proposed} → Authorised {authorised}
       </p>
-      <div className="relative h-2.5 rounded-full bg-[#f0efea] dark:bg-[#1a1d2a] overflow-hidden">
+      <div className="relative h-2.5 rounded-full bg-[#f0efea] dark:bg-[#1a1b20] overflow-hidden">
         <div
           className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-          style={{ width: `${Math.min(100,(proposed/max)*100)}%`, background: '#6166cf30' }}
+          style={{ width: `${Math.min(100,(proposed/max)*100)}%`, background: 'rgba(32,32,30,0.2)' }}
         />
         <div
           className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
           style={{
             width: `${Math.min(100,(authorised/max)*100)}%`,
-            background: 'linear-gradient(90deg, #6166cf, #8b5cf6)',
+            background: 'linear-gradient(90deg, #18181b, #52525b)',
           }}
         />
       </div>
@@ -240,11 +240,11 @@ export const SmartDialerPanel: React.FC = () => {
           The Safety Controller authorises the final number. AI agents handle overflow answers.
         </p>
         <div className="mt-2 flex items-center gap-2 text-[10px] editorial-mono text-[#8c8a82]">
-          <span className="px-2 py-0.5 rounded bg-[#f0efea] dark:bg-[#1a1d2a]">Pacing proposes</span>
+          <span className="px-2 py-0.5 rounded bg-[#f0efea] dark:bg-[#18191e]">Pacing proposes</span>
           <span>→</span>
-          <span className="px-2 py-0.5 rounded bg-[#f0efea] dark:bg-[#1a1d2a]">Safety authorises</span>
+          <span className="px-2 py-0.5 rounded bg-[#f0efea] dark:bg-[#18191e]">Safety authorises</span>
           <span>→</span>
-          <span className="px-2 py-0.5 rounded bg-[#f0efea] dark:bg-[#1a1d2a]">AI agents handle overflow</span>
+          <span className="px-2 py-0.5 rounded bg-[#f0efea] dark:bg-[#18191e]">AI agents handle overflow</span>
         </div>
       </div>
 
@@ -257,7 +257,7 @@ export const SmartDialerPanel: React.FC = () => {
 
       {!campaign ? (
         /* ---------------------------------------------------------------- Setup */
-        <div className="rounded-2xl border hairline bg-white dark:bg-[#0f1118] p-6 space-y-6">
+        <div className="rounded-2xl border hairline bg-white dark:bg-[#141416] p-6 space-y-6">
           <div>
             <h3 className="text-sm font-bold text-[#20201e] dark:text-[#f1f0ea] mb-1">Lead list</h3>
             <p className="text-xs text-[#696862] dark:text-[#9aa0ad] mb-4">
@@ -268,7 +268,7 @@ export const SmartDialerPanel: React.FC = () => {
             <div className="rounded-xl border hairline overflow-hidden mb-4">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-[#f7f6f2] dark:bg-[#151926] border-b hairline">
+                  <tr className="bg-[#f7f6f2] dark:bg-[#18191e] border-b hairline">
                     <th className="text-left px-3 py-2 text-[#696862] dark:text-[#9aa0ad] font-medium">Name</th>
                     <th className="text-left px-3 py-2 text-[#696862] dark:text-[#9aa0ad] font-medium">Phone</th>
                     <th className="text-left px-3 py-2 text-[#696862] dark:text-[#9aa0ad] font-medium">Company</th>
@@ -277,7 +277,7 @@ export const SmartDialerPanel: React.FC = () => {
                 </thead>
                 <tbody>
                   {leads.map((l, i) => (
-                    <tr key={i} className="border-b hairline last:border-0 hover:bg-[#faf9f7] dark:hover:bg-[#12151f]">
+                    <tr key={i} className="border-b hairline last:border-0 hover:bg-[#faf9f7] dark:hover:bg-[#18191e]">
                       <td className="px-3 py-2 font-medium text-[#20201e] dark:text-[#e8e6e1]">{l.name}</td>
                       <td className="px-3 py-2 editorial-mono text-[10px] text-[#8c8a82]">{l.phone || '—'}</td>
                       <td className="px-3 py-2 text-[#696862] dark:text-[#9aa0ad]">{l.company || '—'}</td>
@@ -297,15 +297,15 @@ export const SmartDialerPanel: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <input id="dialer-lead-name" placeholder="Name" value={newName}
                 onChange={e => setNewName(e.target.value)}
-                className="flex-1 min-w-[120px] px-3 py-1.5 rounded-lg border hairline text-xs bg-white dark:bg-[#151926] text-[#20201e] dark:text-[#e8e6e1]" />
+                className="flex-1 min-w-[120px] px-3 py-1.5 rounded-lg border hairline text-xs bg-white dark:bg-[#18191e] text-[#20201e] dark:text-[#e8e6e1]" />
               <input id="dialer-lead-phone" placeholder="Phone" value={newPhone}
                 onChange={e => setNewPhone(e.target.value)}
-                className="w-36 px-3 py-1.5 rounded-lg border hairline text-xs bg-white dark:bg-[#151926] text-[#20201e] dark:text-[#e8e6e1]" />
+                className="w-36 px-3 py-1.5 rounded-lg border hairline text-xs bg-white dark:bg-[#18191e] text-[#20201e] dark:text-[#e8e6e1]" />
               <input id="dialer-lead-company" placeholder="Company" value={newCompany}
                 onChange={e => setNewCompany(e.target.value)}
-                className="flex-1 min-w-[120px] px-3 py-1.5 rounded-lg border hairline text-xs bg-white dark:bg-[#151926] text-[#20201e] dark:text-[#e8e6e1]" />
+                className="flex-1 min-w-[120px] px-3 py-1.5 rounded-lg border hairline text-xs bg-white dark:bg-[#18191e] text-[#20201e] dark:text-[#e8e6e1]" />
               <button onClick={handleAddLead}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#151926] text-xs text-[#20201e] dark:text-[#e8e6e1] hover:border-[#6166cf] transition">
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#18191e] text-xs text-[#20201e] dark:text-[#e8e6e1] hover:border-[#20201e] dark:hover:border-white/40 transition">
                 <Plus size={12} /> Add
               </button>
             </div>
@@ -316,7 +316,7 @@ export const SmartDialerPanel: React.FC = () => {
             <label className="text-sm text-[#55544e] dark:text-[#a09e97]">AI agent slots</label>
             <input id="dialer-ai-slots" type="range" min={1} max={10} value={aiSlots}
               onChange={e => setAiSlots(Number(e.target.value))}
-              className="w-28 accent-[#6166cf]" />
+              className="w-28 accent-[#20201e] dark:accent-[#e8e6e1]" />
             <span className="text-sm font-bold text-[#20201e] dark:text-[#e8e6e1] w-6">{aiSlots}</span>
           </div>
 
@@ -325,7 +325,7 @@ export const SmartDialerPanel: React.FC = () => {
             id="dialer-launch-btn"
             onClick={handleCreate}
             disabled={busy || leads.length === 0}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#6166cf] hover:bg-[#5257be] text-white text-sm font-semibold uppercase tracking-[.08em] transition shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#141416] hover:bg-[#222227] text-white dark:bg-[#18191e] dark:hover:bg-[#252730] dark:text-[#f4f3ef] border border-black/20 dark:border-white/15 text-sm font-semibold uppercase tracking-[.08em] transition shadow-sm hover:shadow active:scale-95 disabled:opacity-50 cursor-pointer"
           >
             <Phone size={15} />
             {busy ? 'Creating campaign…' : `Launch campaign · ${leads.length} leads`}
@@ -339,16 +339,14 @@ export const SmartDialerPanel: React.FC = () => {
             <div className="flex items-center gap-3">
               <h3 className="text-sm font-bold text-[#20201e] dark:text-[#f1f0ea]">{campaign.name}</h3>
               <span className={`editorial-mono text-[9.5px] uppercase tracking-[.12em] px-2 py-0.5 rounded-full ${
-                campaign.state === 'running'   ? 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400' :
-                campaign.state === 'paused'    ? 'bg-amber-100 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400' :
-                campaign.state === 'completed' ? 'bg-[#f0efea] dark:bg-[#1a1d2a] text-[#8c8a82]' :
-                'bg-[#f0efea] dark:bg-[#1a1d2a] text-[#8c8a82]'
+                campaign.state === 'running'   ? 'bg-[#141416] text-white dark:bg-[#f1f0ea] dark:text-[#141416]' :
+                campaign.state === 'paused'    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300' :
+                'bg-[#f0efea] dark:bg-[#1a1b22] text-[#8c8a82] dark:text-[#a1a1aa]'
               }`}>
                 {campaign.state}
               </span>
               {cb && (
-                <span className="editorial-mono text-[9px] uppercase tracking-[.1em] px-2 py-0.5 rounded-full border hairline"
-                  style={{ color: cb.color }}>
+                <span className={`editorial-mono text-[9px] uppercase tracking-[.1em] px-2 py-0.5 rounded-full border hairline ${cb.bgClass} ${cb.textClass}`}>
                   {cb.label}
                 </span>
               )}
@@ -356,7 +354,7 @@ export const SmartDialerPanel: React.FC = () => {
             <div className="flex items-center gap-2">
               {campaign.circuit_breaker !== 'closed' && (
                 <button onClick={handleResetBreaker} disabled={busy}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-[11px] font-semibold uppercase tracking-[.08em] transition disabled:opacity-50">
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-[#f0efea] hover:bg-[#e4e2d8] dark:bg-[#1e2028] dark:hover:bg-[#252834] text-[#20201e] dark:text-[#f1f0ea] text-[11px] font-semibold uppercase tracking-[.08em] transition disabled:opacity-50">
                   <RefreshCw size={12} /> Reset Breaker
                 </button>
               )}
@@ -368,13 +366,13 @@ export const SmartDialerPanel: React.FC = () => {
                   </button>
                 ) : (
                   <button onClick={handleStart} disabled={busy}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#6166cf] hover:bg-[#5257be] text-white text-[11px] font-semibold uppercase tracking-[.08em] transition disabled:opacity-50">
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#141416] hover:bg-[#222227] text-white dark:bg-[#18191e] dark:hover:bg-[#252730] dark:text-[#f4f3ef] border border-black/20 dark:border-white/15 text-[11px] font-semibold uppercase tracking-[.08em] transition shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer">
                     <Play size={12} /> {campaign.state === 'idle' ? 'Start' : 'Resume'}
                   </button>
                 )
               )}
               <button onClick={() => setCampaign(null)} disabled={busy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline text-[11px] text-[#696862] dark:text-[#9aa0ad] hover:border-[#6166cf] transition">
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline text-[11px] text-[#696862] dark:text-[#9aa0ad] hover:border-[#20201e] dark:hover:border-white/40 transition">
                 New campaign
               </button>
             </div>
@@ -382,12 +380,12 @@ export const SmartDialerPanel: React.FC = () => {
 
           {/* Stats grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Dialing" value={campaign.dialing} icon={Phone} color="#6166cf"
+            <StatCard label="Dialing" value={campaign.dialing} icon={Phone}
               sub={`of ${campaign.total_leads} leads`} />
-            <StatCard label="AI Handled" value={campaign.answered_ai} icon={Bot} color="#10b981"
+            <StatCard label="AI Handled" value={campaign.answered_ai} icon={Bot}
               sub={`${campaign.ai_slots_used}/${campaign.ai_slots_total} slots used`} />
-            <StatCard label="Human Rep" value={campaign.answered_human} icon={UserCheck} color="#8b5cf6" />
-            <StatCard label="No Answer" value={campaign.no_answer + campaign.dropped} icon={PhoneOff} color="#f59e0b"
+            <StatCard label="Human Rep" value={campaign.answered_human} icon={UserCheck} />
+            <StatCard label="No Answer" value={campaign.no_answer + campaign.dropped} icon={PhoneOff}
               sub={`abandon ${(campaign.abandon_rate * 100).toFixed(1)}%`} />
           </div>
 
@@ -400,8 +398,8 @@ export const SmartDialerPanel: React.FC = () => {
 
           {/* Safety alert */}
           {campaign.safety_paused && (
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 text-sm text-amber-700 dark:text-amber-400">
-              <Shield size={14} />
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#f4f3ee] dark:bg-[#181920] border hairline text-xs text-[#52525b] dark:text-[#a1a1aa]">
+              <Shield size={14} className="text-[#8c8a82]" />
               <span>Safety Controller paused dialing — abandon rate or circuit breaker triggered.</span>
             </div>
           )}
@@ -414,7 +412,7 @@ export const SmartDialerPanel: React.FC = () => {
             <div className="rounded-xl border hairline overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-[#f7f6f2] dark:bg-[#151926] border-b hairline">
+                  <tr className="bg-[#f7f6f2] dark:bg-[#18191e] border-b hairline">
                     <th className="text-left px-3 py-2 text-[#696862] dark:text-[#9aa0ad] font-medium">Name</th>
                     <th className="text-left px-3 py-2 text-[#696862] dark:text-[#9aa0ad] font-medium hidden sm:table-cell">Company</th>
                     <th className="text-left px-3 py-2 text-[#696862] dark:text-[#9aa0ad] font-medium">Status</th>
@@ -425,12 +423,11 @@ export const SmartDialerPanel: React.FC = () => {
                   {campaign.leads.slice(0, 20).map(lead => {
                     const sc = LEAD_STATUS_CONFIG[lead.status] ?? LEAD_STATUS_CONFIG.queued;
                     return (
-                      <tr key={lead.id} className="border-b hairline last:border-0 hover:bg-[#faf9f7] dark:hover:bg-[#12151f] transition">
+                      <tr key={lead.id} className="border-b hairline last:border-0 hover:bg-[#faf9f7] dark:hover:bg-[#18191e] transition">
                         <td className="px-3 py-2 font-medium text-[#20201e] dark:text-[#e8e6e1]">{lead.name}</td>
                         <td className="px-3 py-2 text-[#696862] dark:text-[#9aa0ad] hidden sm:table-cell">{lead.company || '—'}</td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9.5px] editorial-mono uppercase tracking-[.08em] font-semibold ${sc.bg}`}
-                            style={{ color: sc.color }}>
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9.5px] editorial-mono uppercase tracking-[.08em] font-semibold ${sc.bgClass} ${sc.textClass}`}>
                             {lead.status === 'dialing' && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
                             {sc.label}
                             {lead.handler === 'ai' && ' · AI'}
@@ -449,17 +446,17 @@ export const SmartDialerPanel: React.FC = () => {
           </div>
 
           {/* Live connect rate bar */}
-          <div className="rounded-xl border hairline bg-white dark:bg-[#0f1118] px-4 py-3 space-y-2">
+          <div className="rounded-xl border hairline bg-white dark:bg-[#141416] px-4 py-3 space-y-2 shadow-xs">
             <div className="flex items-center justify-between">
               <p className="text-[9.5px] editorial-mono uppercase tracking-[.16em] text-[#8c8a82]">Rolling connect rate</p>
               <span className="text-xs font-bold text-[#20201e] dark:text-[#f1f0ea]">
                 {(campaign.connect_rate * 100).toFixed(0)}%
               </span>
             </div>
-            <div className="h-2 rounded-full bg-[#f0efea] dark:bg-[#1a1d2a] overflow-hidden">
+            <div className="h-2 rounded-full bg-[#f0efea] dark:bg-[#1a1b20] overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${(campaign.connect_rate * 100).toFixed(0)}%`, background: 'linear-gradient(90deg, #6166cf, #10b981)' }}
+                style={{ width: `${(campaign.connect_rate * 100).toFixed(0)}%`, background: 'linear-gradient(90deg, #18181b, #52525b)' }}
               />
             </div>
             <p className="text-[9px] text-[#a7a59d] dark:text-[#5a6175]">

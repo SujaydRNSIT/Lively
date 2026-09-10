@@ -39,7 +39,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
       case 'technology':
         return <Zap className="w-4 h-4 text-sky-400" />;
       default:
-        return <Layers className="w-4 h-4 text-indigo-400" />;
+        return <Layers className="w-4 h-4 text-slate-300" />;
     }
   };
 
@@ -49,7 +49,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-surface-border bg-surface/50">
           <div className="flex items-center space-x-2.5">
-            <BookOpen className="w-5 h-5 text-indigo-400" />
+            <BookOpen className="w-5 h-5 text-slate-200" />
             <h2 className="text-base font-bold text-white">Lively RAG Knowledge Base & Battlecards</h2>
           </div>
           <button
@@ -69,7 +69,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
               placeholder="Search battlecards, pricing, and Agora architectural specs..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-surface/80 border border-surface-border focus:border-indigo-500 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+              className="w-full bg-surface/80 border border-surface-border focus:border-white/40 focus:ring-1 focus:ring-white/20 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
             />
           </div>
 
@@ -80,7 +80,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
                   selectedCategory === cat
-                    ? 'bg-indigo-600 text-white'
+                    ? 'bg-[#18181b] text-white border border-white/20 shadow-xs'
                     : 'bg-surface text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -95,14 +95,14 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
           {filteredDocs.map((doc) => (
             <div
               key={doc.doc_id}
-              className="p-4 rounded-xl bg-surface/60 border border-surface-border hover:border-indigo-500/30 transition-all space-y-2"
+              className="p-4 rounded-xl bg-surface/60 border border-surface-border hover:border-white/20 transition-all space-y-2"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   {getCategoryIcon(doc.category)}
                   <h4 className="text-sm font-semibold text-slate-200">{doc.title}</h4>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono uppercase bg-white/10 text-slate-200 border border-white/15">
                   {doc.category}
                 </span>
               </div>

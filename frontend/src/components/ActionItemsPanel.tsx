@@ -10,7 +10,7 @@ const CIRCLE = { cx: 1250, cy: 340, radius: 390 };
 const STAGE_Y = [170, 340, 530];
 const INK = 'var(--action-ink)';
 const MUTED = 'var(--action-muted)';
-const ACCENT = '#6166cf';
+const ACCENT = '#20201e';
 
 function pointOnArc(y: number) {
   const dy = y - CIRCLE.cy;
@@ -65,8 +65,8 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
         <div className="border-b hairline pb-4">
           <div className="flex items-center justify-between">
             <p className="editorial-mono text-[10px] uppercase tracking-[.16em] text-[#696862] dark:text-[#9aa0ad]">03 / Automated actions</p>
-            <span className="editorial-mono text-[10px] uppercase tracking-[.14em] text-[#6166cf] flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-[#6166cf] animate-pulse" />
+            <span className="editorial-mono text-[10px] uppercase tracking-[.14em] text-[#20201e] dark:text-[#f1f0ea] flex items-center gap-1.5 font-semibold">
+              <span className="inline-block h-2 w-2 rounded-full bg-[#20201e] dark:bg-[#f1f0ea] animate-pulse" />
               Connected Pipeline
             </span>
           </div>
@@ -76,7 +76,7 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
         </div>
 
         <div className="relative pt-6 pb-2">
-          <div className="hidden md:flex absolute top-[44%] left-[33.333%] -translate-x-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white dark:bg-[#151926] border hairline items-center justify-center text-[#6166cf] shadow-xs">
+          <div className="hidden md:flex absolute top-[44%] left-[33.333%] -translate-x-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white dark:bg-[#151926] border hairline items-center justify-center text-[#20201e] dark:text-[#f1f0ea] shadow-xs">
             <ArrowRight size={14} />
           </div>
           <div className="hidden md:flex absolute top-[44%] left-[66.666%] -translate-x-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white dark:bg-[#151926] border hairline items-center justify-center text-[#8c8a82] dark:text-[#697284] shadow-xs">
@@ -85,7 +85,7 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
             {/* Box 1: CRM */}
-            <div className="rounded-2xl border hairline bg-white dark:bg-[#121520] p-6 shadow-2xs flex flex-col transition-all duration-300 hover:border-[#6166cf]/40">
+            <div className="rounded-2xl border hairline bg-white dark:bg-[#121520] p-6 shadow-2xs flex flex-col transition-all duration-300 hover:border-black/30 dark:hover:border-white/30">
               <div className="flex items-center justify-between">
                 <span className="editorial-serif text-3xl text-[#20201e] dark:text-[#f1f0ea]">01</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] editorial-mono uppercase tracking-[.12em] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 font-semibold">
@@ -117,7 +117,7 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
             </div>
 
             {/* Box 2: Demo booking */}
-            <div className={`rounded-2xl border bg-white dark:bg-[#121520] p-6 shadow-2xs flex flex-col transition-all duration-300 ${demo ? 'border-[#6166cf] ring-1 ring-[#6166cf]/30' : 'hairline hover:border-[#6166cf]/40'}`}>
+            <div className={`rounded-2xl border bg-white dark:bg-[#121520] p-6 shadow-2xs flex flex-col transition-all duration-300 ${demo ? 'border-[#20201e] dark:border-white/30 ring-1 ring-black/10 dark:ring-white/20' : 'hairline hover:border-black/30 dark:hover:border-white/30'}`}>
               <div className="flex items-center justify-between">
                 <span className="editorial-serif text-3xl text-[#20201e] dark:text-[#f1f0ea]">02</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] editorial-mono uppercase tracking-[.12em] bg-[#f4f3ed] text-[#696862] dark:bg-[#181c28] dark:text-[#9aa0ad] border hairline">
@@ -130,23 +130,23 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
               </h3>
 
               {demo ? (
-                <div className="mt-3 p-3.5 rounded-xl bg-gradient-to-br from-indigo-50/70 to-purple-50/40 dark:from-indigo-950/30 dark:to-purple-950/20 border border-indigo-200/80 dark:border-indigo-800/60 space-y-2">
+                <div className="mt-3 p-3.5 rounded-xl bg-[#f7f6f2] dark:bg-[#181c28] border border-[#20201e]/20 dark:border-white/10 space-y-2">
                   <div className="flex items-start gap-2.5">
-                    <Calendar size={16} className="text-[#6166cf] shrink-0 mt-0.5" />
+                    <Calendar size={16} className="text-[#20201e] dark:text-[#f1f0ea] shrink-0 mt-0.5" />
                     <span className="text-sm font-bold text-[#20201e] dark:text-[#f1f0ea] leading-tight">{demo.time}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-[#55544e] dark:text-[#a09e97]">
-                    <Mail size={13} className="text-[#6166cf] shrink-0" />
+                    <Mail size={13} className="text-[#20201e] dark:text-[#e8e6e1] shrink-0" />
                     <span className="truncate font-medium">{demo.email || 'Email needed for the invite'}</span>
                   </div>
                   <p className="text-[10px] editorial-mono uppercase text-emerald-600 dark:text-emerald-400">{INVITE_STATUS_LABELS[demo.invite_status || ''] || ''}</p>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <a href={demo.meeting_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6166cf] hover:bg-[#5257be] text-white text-[11px] font-semibold uppercase tracking-[.08em] transition shadow-xs">
+                    <a href={demo.meeting_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#141416] hover:bg-[#222227] text-white dark:bg-[#18191e] dark:hover:bg-[#252730] dark:text-[#f4f3ef] border border-black/20 dark:border-white/15 text-[11px] font-semibold uppercase tracking-[.08em] transition shadow-xs">
                       <Video size={12} /><span>Video room</span><ExternalLink size={11} />
                     </a>
                     {demo.google_calendar_link && (
                       <a href={demo.google_calendar_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#181c28] text-[#20201e] dark:text-[#f1f0ea] text-[11px] font-semibold uppercase tracking-[.08em] transition shadow-xs">
-                        <Calendar size={12} className="text-[#6166cf]" /><span>Calendar</span><ExternalLink size={11} />
+                        <Calendar size={12} className="text-[#20201e] dark:text-[#e8e6e1]" /><span>Calendar</span><ExternalLink size={11} />
                       </a>
                     )}
                   </div>
@@ -163,10 +163,10 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
                         type="button"
                         onClick={() => handleBook(slot)}
                         disabled={busy !== null}
-                        className="inline-flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#121520] text-left text-[11px] font-medium text-[#20201e] dark:text-[#f1f0ea] hover:border-[#6166cf] transition disabled:opacity-50"
+                        className="inline-flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#121520] text-left text-[11px] font-medium text-[#20201e] dark:text-[#f1f0ea] hover:border-[#20201e] dark:hover:border-white/40 transition disabled:opacity-50"
                       >
                         <span>{slot}</span>
-                        <span className="editorial-mono text-[9px] uppercase text-[#6166cf]">{busy === slot ? 'Booking…' : 'Book'}</span>
+                        <span className="editorial-mono text-[9px] uppercase text-[#20201e] dark:text-[#f1f0ea] font-semibold">{busy === slot ? 'Booking…' : 'Book'}</span>
                       </button>
                     ))}
                     {openSlots.length === 0 && <p className="text-xs italic text-[#8c8a82]">No open slots in the next three weeks.</p>}
@@ -176,7 +176,7 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
             </div>
 
             {/* Box 3: Human escalation */}
-            <div className={`rounded-2xl border bg-white dark:bg-[#121520] p-6 shadow-2xs flex flex-col transition-all duration-300 ${escalation ? 'border-amber-500/80 ring-1 ring-amber-500/20' : 'hairline hover:border-[#6166cf]/40'}`}>
+            <div className={`rounded-2xl border bg-white dark:bg-[#121520] p-6 shadow-2xs flex flex-col transition-all duration-300 ${escalation ? 'border-amber-500/80 ring-1 ring-amber-500/20' : 'hairline hover:border-black/30 dark:hover:border-white/30'}`}>
               <div className="flex items-center justify-between">
                 <span className="editorial-serif text-3xl text-[#20201e] dark:text-[#f1f0ea]">03</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] editorial-mono uppercase tracking-[.12em] bg-[#f4f3ed] text-[#696862] dark:bg-[#181c28] dark:text-[#9aa0ad] border hairline">

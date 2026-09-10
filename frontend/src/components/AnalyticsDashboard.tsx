@@ -21,7 +21,7 @@ export const AnalyticsDashboard: React.FC<{ dealState: DealState }> = ({ dealSta
   ];
 
   return <section className="border-t hairline pt-8">
-    <div className="flex items-end justify-between border-b hairline pb-4"><div><p className="editorial-mono text-[10px] uppercase tracking-[.16em] text-[#696862]">Technical notes</p><h2 className="editorial-serif mt-2 text-3xl">The response, measured quietly.</h2></div><span className="editorial-mono text-[10px] uppercase tracking-[.13em] text-[#6166cf]">{badge}</span></div>
+    <div className="flex items-end justify-between border-b hairline pb-4"><div><p className="editorial-mono text-[10px] uppercase tracking-[.16em] text-[#696862]">Technical notes</p><h2 className="editorial-serif mt-2 text-3xl">The response, measured quietly.</h2></div><span className="editorial-mono text-[10px] uppercase tracking-[.13em] text-[#20201e] dark:text-[#f1f0ea] font-semibold">{badge}</span></div>
     <dl className="grid grid-cols-2 border-b hairline md:grid-cols-4">{measures.map(([term, value]) => <div key={term} className="border-r hairline px-4 py-6 first:pl-0 last:border-0"><dt className="editorial-mono text-[9px] uppercase tracking-[.12em] text-[#77756e]">{term}</dt><dd className="mt-2 editorial-serif text-3xl">{value}</dd></div>)}</dl>
     <p className="mt-3 text-xs text-[#77756e]">TTFT is measured on the backend, from receiving the request to sending the first spoken token back to Agora. It does not include speech recognition, end-of-speech detection or speech synthesis.</p>
     <div className="mt-7 grid gap-8 md:grid-cols-3">

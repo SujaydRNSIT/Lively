@@ -88,7 +88,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
 
         {/* Header Pill & Title */}
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] editorial-mono uppercase tracking-[.14em] bg-[#6166cf]/10 text-[#6166cf] font-semibold border border-[#6166cf]/20">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] editorial-mono uppercase tracking-[.14em] bg-black/5 dark:bg-white/10 text-[#20201e] dark:text-[#f1f0ea] font-semibold border border-black/10 dark:border-white/20">
             <Bell size={11} />
             <span>Meeting Notifications & Calendar Sync</span>
           </div>
@@ -105,11 +105,11 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
         {/* Feature Tags */}
         <div className="mt-4 grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-[#f7f6f0] dark:bg-[#181d2c] border hairline text-[11px] text-[#4c4b46] dark:text-[#a09e97]">
           <div className="flex items-center gap-2">
-            <Video size={13} className="text-[#6166cf] shrink-0" />
+            <Video size={13} className="text-[#20201e] dark:text-[#f1f0ea] shrink-0" />
             <span>Shared video room link</span>
           </div>
           <div className="flex items-center gap-2">
-            <Calendar size={13} className="text-[#6166cf] shrink-0" />
+            <Calendar size={13} className="text-[#20201e] dark:text-[#f1f0ea] shrink-0" />
             <span>One-click Calendar block</span>
           </div>
         </div>
@@ -118,7 +118,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
         <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
           <div>
             <label className="block editorial-mono text-[10.5px] uppercase tracking-[.12em] font-semibold text-[#55544e] dark:text-[#a09e97] mb-1.5">
-              Email Address <span className="text-[#6166cf]">*</span>
+              Email Address <span className="text-[#20201e] dark:text-[#f1f0ea]">*</span>
             </label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8c8a82] dark:text-[#6e7587]" />
@@ -132,7 +132,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
                   setEmail(e.target.value);
                   if (error) setError(null);
                 }}
-                className="w-full rounded-xl border hairline bg-white dark:bg-[#101420] pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-[#20201e] dark:text-[#f1f0ea] placeholder-[#8c8a82] dark:placeholder-[#6e7587] focus:outline-none focus:ring-2 focus:ring-[#6166cf]/40 transition"
+                className="w-full rounded-xl border hairline bg-white dark:bg-[#101420] pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-[#20201e] dark:text-[#f1f0ea] placeholder-[#8c8a82] dark:placeholder-[#6e7587] focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-[#20201e] dark:focus:border-white/40 transition"
               />
             </div>
           </div>
@@ -149,7 +149,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
                   placeholder="Alex Rivera"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border hairline bg-white dark:bg-[#101420] pl-9 pr-3 py-2 text-xs text-[#20201e] dark:text-[#f1f0ea] placeholder-[#8c8a82] dark:placeholder-[#6e7587] focus:outline-none focus:ring-2 focus:ring-[#6166cf]/40 transition"
+                  className="w-full rounded-xl border hairline bg-white dark:bg-[#101420] pl-9 pr-3 py-2 text-xs text-[#20201e] dark:text-[#f1f0ea] placeholder-[#8c8a82] dark:placeholder-[#6e7587] focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-[#20201e] dark:focus:border-white/40 transition"
                 />
               </div>
             </div>
@@ -165,7 +165,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
                   placeholder="NextGen AI"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  className="w-full rounded-xl border hairline bg-white dark:bg-[#101420] pl-9 pr-3 py-2 text-xs text-[#20201e] dark:text-[#f1f0ea] placeholder-[#8c8a82] dark:placeholder-[#6e7587] focus:outline-none focus:ring-2 focus:ring-[#6166cf]/40 transition"
+                  className="w-full rounded-xl border hairline bg-white dark:bg-[#101420] pl-9 pr-3 py-2 text-xs text-[#20201e] dark:text-[#f1f0ea] placeholder-[#8c8a82] dark:placeholder-[#6e7587] focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 focus:border-[#20201e] dark:focus:border-white/40 transition"
                 />
               </div>
             </div>
@@ -190,7 +190,7 @@ export const EmailCaptureModal: React.FC<EmailCaptureModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#6166cf] hover:bg-[#5257be] text-white text-xs font-semibold uppercase tracking-[.08em] transition shadow-sm hover:shadow active:scale-95 disabled:opacity-50 cursor-pointer order-1 sm:order-2"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#141416] hover:bg-[#222227] text-white dark:bg-[#18191e] dark:hover:bg-[#252730] dark:text-[#f4f3ef] border border-black/20 dark:border-white/15 text-xs font-semibold uppercase tracking-[.08em] transition shadow-sm hover:shadow active:scale-95 disabled:opacity-50 cursor-pointer order-1 sm:order-2"
             >
               <span>{isSubmitting ? 'Saving...' : 'Confirm & Enter System'}</span>
               <ArrowRight size={13} />

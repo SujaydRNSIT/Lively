@@ -17,36 +17,48 @@ interface ReasoningTraceProps {
 
 const STEP_CONFIG = [
   {
-    key:   'heard'   as const,
-    icon:  Brain,
-    label: 'Heard',
-    color: '#6166cf',
-    bg:    'bg-indigo-50 dark:bg-indigo-950/30',
-    border:'border-indigo-200/60 dark:border-indigo-800/40',
+    key:        'heard' as const,
+    icon:       Brain,
+    label:      'Heard',
+    dotBg:      'bg-[#f0efea] dark:bg-[#1a1d2c]',
+    dotBorder:  'border-[#d7d5ce] dark:border-[#2e3346]',
+    iconColor:  'text-[#696862] dark:text-[#a1a1aa]',
+    labelColor: 'text-[#696862] dark:text-[#a1a1aa]',
+    bg:         'bg-[#faf9f6] dark:bg-[#13151f]',
+    border:     'border-[#e5e4de] dark:border-[#222533]',
   },
   {
-    key:   'decided' as const,
-    icon:  Route,
-    label: 'Decision',
-    color: '#8b5cf6',
-    bg:    'bg-violet-50 dark:bg-violet-950/30',
-    border:'border-violet-200/60 dark:border-violet-800/40',
+    key:        'decided' as const,
+    icon:       Route,
+    label:      'Decision',
+    dotBg:      'bg-[#f0efea] dark:bg-[#1a1d2c]',
+    dotBorder:  'border-[#d7d5ce] dark:border-[#2e3346]',
+    iconColor:  'text-[#696862] dark:text-[#a1a1aa]',
+    labelColor: 'text-[#696862] dark:text-[#a1a1aa]',
+    bg:         'bg-[#faf9f6] dark:bg-[#13151f]',
+    border:     'border-[#e5e4de] dark:border-[#222533]',
   },
   {
-    key:   'did'     as const,
-    icon:  Wrench,
-    label: 'Actions',
-    color: '#0ea5e9',
-    bg:    'bg-sky-50 dark:bg-sky-950/30',
-    border:'border-sky-200/60 dark:border-sky-800/40',
+    key:        'did' as const,
+    icon:       Wrench,
+    label:      'Actions',
+    dotBg:      'bg-[#f0efea] dark:bg-[#1a1d2c]',
+    dotBorder:  'border-[#d7d5ce] dark:border-[#2e3346]',
+    iconColor:  'text-[#4c4b46] dark:text-[#c4c2ba]',
+    labelColor: 'text-[#4c4b46] dark:text-[#c4c2ba]',
+    bg:         'bg-[#faf9f6] dark:bg-[#13151f]',
+    border:     'border-[#e5e4de] dark:border-[#222533]',
   },
   {
-    key:   'result'  as const,
-    icon:  CheckCircle2,
-    label: 'Result',
-    color: '#10b981',
-    bg:    'bg-emerald-50 dark:bg-emerald-950/30',
-    border:'border-emerald-200/60 dark:border-emerald-800/40',
+    key:        'result' as const,
+    icon:       CheckCircle2,
+    label:      'Result',
+    dotBg:      'bg-[#eceae2] dark:bg-[#1f2231]',
+    dotBorder:  'border-[#cfccc2] dark:border-[#353a4d]',
+    iconColor:  'text-[#20201e] dark:text-[#f1f0ea]',
+    labelColor: 'text-[#20201e] dark:text-[#f1f0ea]',
+    bg:         'bg-[#f3f2ec] dark:bg-[#161824]',
+    border:     'border-[#dcdad0] dark:border-[#2a2d3c]',
   },
 ];
 
@@ -78,13 +90,16 @@ function useTypewriter(text: string, speed = 18): string {
 const TraceStep: React.FC<{
   icon: React.FC<any>;
   label: string;
-  color: string;
+  dotBg: string;
+  dotBorder: string;
+  iconColor: string;
+  labelColor: string;
   bg: string;
   border: string;
   content: string | string[];
   index: number;
   isLast: boolean;
-}> = ({ icon: Icon, label, color, bg, border, content, index, isLast }) => {
+}> = ({ icon: Icon, label, dotBg, dotBorder, iconColor, labelColor, bg, border, content, index, isLast }) => {
   const textStr  = Array.isArray(content) ? content.join(' · ') : content;
   const animated = useTypewriter(textStr, 14);
 
@@ -93,21 +108,19 @@ const TraceStep: React.FC<{
       {/* Timeline dot and connector */}
       <div className="flex flex-col items-center gap-0 shrink-0">
         <div
-          className="flex items-center justify-center w-7 h-7 rounded-full shrink-0 shadow-sm"
-          style={{ background: color + '18', border: `1.5px solid ${color}40` }}
+          className={`flex items-center justify-center w-7 h-7 rounded-full shrink-0 shadow-sm border ${dotBg} ${dotBorder} ${iconColor}`}
         >
-          <Icon size={13} style={{ color }} />
+          <Icon size={13} />
         </div>
         {!isLast && (
-          <div className="w-px flex-1 mt-1 mb-0" style={{ background: `${color}28`, minHeight: 16 }} />
+          <div className="w-px flex-1 mt-1 mb-0 bg-[#d7d5ce] dark:bg-[#282c3c]" style={{ minHeight: 16 }} />
         )}
       </div>
 
       {/* Step content */}
       <div className={`flex-1 rounded-xl border px-3 py-2.5 mb-2 ${bg} ${border}`} style={{ minHeight: 44 }}>
         <p
-          className="text-[9.5px] uppercase tracking-[.16em] font-semibold mb-1"
-          style={{ color }}
+          className={`text-[9.5px] uppercase tracking-[.16em] font-semibold mb-1 ${labelColor}`}
         >
           {label}
         </p>
@@ -115,7 +128,7 @@ const TraceStep: React.FC<{
           <ul className="space-y-0.5">
             {content.map((item, i) => (
               <li key={i} className="text-[11px] text-[#20201e] dark:text-[#e8e6e1] leading-relaxed flex items-start gap-1.5">
-                <span className="shrink-0 mt-1" style={{ color, opacity: 0.6 }}>›</span>
+                <span className="shrink-0 mt-1 text-[#8c8a82] dark:text-[#6b7280]">›</span>
                 <span>{item}</span>
               </li>
             ))}
@@ -146,12 +159,12 @@ export const ReasoningTrace: React.FC<ReasoningTraceProps> = ({ reasoning }) => 
 
   return (
     <div
-      className={`rounded-2xl border hairline bg-white dark:bg-[#0f1118] shadow-sm overflow-hidden transition-all duration-300 ${flash ? 'ring-2 ring-[#6166cf]/30' : ''}`}
+      className={`rounded-2xl border hairline bg-white dark:bg-[#141416] shadow-sm overflow-hidden transition-all duration-300 ${flash ? 'ring-2 ring-neutral-900/30 dark:ring-white/30' : ''}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b hairline">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[#6166cf] animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-[#20201e] dark:bg-[#e8e6e1] animate-pulse" />
           <span className="text-[10px] editorial-mono uppercase tracking-[.18em] text-[#696862] dark:text-[#9aa0ad] font-semibold">
             Agent Decision Trace
           </span>
@@ -193,7 +206,10 @@ export const ReasoningTrace: React.FC<ReasoningTraceProps> = ({ reasoning }) => 
                 key={cfg.key}
                 icon={cfg.icon}
                 label={cfg.label}
-                color={cfg.color}
+                dotBg={cfg.dotBg}
+                dotBorder={cfg.dotBorder}
+                iconColor={cfg.iconColor}
+                labelColor={cfg.labelColor}
                 bg={cfg.bg}
                 border={cfg.border}
                 content={reasoning[cfg.key] as string | string[]}

@@ -349,7 +349,7 @@ export const App: React.FC = () => {
   const transcript = dealState.transcript.map(t => ({ role: t.role as any, text: t.content, timestamp: t.timestamp }));
 
   return (
-    <div className="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen flex flex-col selection:bg-neutral-900 selection:text-white dark:selection:bg-neutral-100 dark:selection:text-neutral-900">
       <Navbar
         agoraConfig={agoraConfig}
         isConnected={isConnected}

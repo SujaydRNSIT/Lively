@@ -193,34 +193,47 @@ html.dark .agent-face-brow { fill: #f1f0ea; }
   animation: aura-idle 3.8s ease-in-out infinite;
 }
 
-/* listening: blue breathe */
+/* listening: matte dark / silver breathe */
 .agent-aura-listening {
-  border-color: #6166cf44;
-  box-shadow: 0 0 0 0 #6166cf22;
+  border-color: #20201e44;
+  box-shadow: 0 0 0 0 #20201e22;
   opacity: 1;
   animation: aura-listen 2.2s ease-in-out infinite;
+}
+html.dark .agent-aura-listening {
+  border-color: #ffffff44;
+  box-shadow: 0 0 0 0 #ffffff22;
 }
 
 /* speaking: multi-ring wave */
 .agent-aura-speaking {
-  border-color: #6166cf;
+  border-color: #20201e;
   opacity: 1;
   animation: aura-speak 0.65s ease-in-out infinite alternate;
+}
+html.dark .agent-aura-speaking {
+  border-color: #f1f0ea;
 }
 .agent-aura-speaking::after {
   content: '';
   position: absolute;
   inset: -14px;
   border-radius: 50%;
-  border: 1.5px solid #6166cf44;
+  border: 1.5px solid #20201e44;
   animation: aura-speak-outer 0.65s ease-in-out infinite alternate;
+}
+html.dark .agent-aura-speaking::after {
+  border-color: #ffffff44;
 }
 
 /* thinking: rotating dashed ring */
 .agent-aura-thinking {
-  border: 2px dashed #a8acf055;
+  border: 2px dashed #20201e55;
   opacity: 0.8;
   animation: aura-think 3.2s linear infinite;
+}
+html.dark .agent-aura-thinking {
+  border-color: #ffffff55;
 }
 
 /* happy: green shimmer */
@@ -320,13 +333,13 @@ html.dark .agent-face-dot { fill: #f1f0ea; }
   50%       { opacity: 0.6; transform: scale(1.04); }
 }
 @keyframes aura-listen {
-  0%    { box-shadow: 0 0 0 0   #6166cf33; }
-  70%   { box-shadow: 0 0 0 14px #6166cf00; }
-  100%  { box-shadow: 0 0 0 0   #6166cf00; }
+  0%    { box-shadow: 0 0 0 0   rgba(32, 32, 30, 0.25); }
+  70%   { box-shadow: 0 0 0 14px rgba(32, 32, 30, 0); }
+  100%  { box-shadow: 0 0 0 0   rgba(32, 32, 30, 0); }
 }
 @keyframes aura-speak {
-  from { box-shadow: 0 0 6px  3px #6166cf44; transform: scale(0.98); }
-  to   { box-shadow: 0 0 18px 8px #6166cf22; transform: scale(1.04); }
+  from { box-shadow: 0 0 6px  3px rgba(32, 32, 30, 0.22); transform: scale(0.98); }
+  to   { box-shadow: 0 0 18px 8px rgba(32, 32, 30, 0.10); transform: scale(1.04); }
 }
 @keyframes aura-speak-outer {
   from { opacity: 0.5; transform: scale(1.0); }
@@ -378,14 +391,16 @@ html.dark .agent-face-dot { fill: #f1f0ea; }
 .action-orbit-step.is-active { z-index: 2; color: #20201e; }.action-orbit-step.is-active .action-orbit-number { color: #20201e; opacity: 1; transform: translateY(-2px); }.action-orbit-step.is-active h3 { color: #20201e; }
 .action-orbit-step.is-active .action-orbit-marker { border-color: #20201e; background: #20201e; transform: translate(-50%, -50%) scale(1.2); }
 .action-orbit-detail { width: 230px; margin-top: 20px; font-size: 13px; line-height: 1.55; color: #55544f; animation: action-detail-in .48s ease both; }
-.action-orbit-detail p { margin: 0; }.action-orbit-detail .editorial-mono { display: flex; align-items: center; gap: 7px; margin-top: 14px; color: #6166cf; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }.action-orbit-detail i, .action-orbit-current i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.action-orbit-detail p { margin: 0; }.action-orbit-detail .editorial-mono { display: flex; align-items: center; gap: 7px; margin-top: 14px; color: #20201e; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }.action-orbit-detail i, .action-orbit-current i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+html.dark .action-orbit-detail .editorial-mono { color: #f1f0ea; }
 .action-orbit-trigger { margin-top: 10px !important; color: #8a8881; font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1.65; }.action-orbit-detail a { display: inline-flex; align-items: center; gap: 5px; margin-top: 13px; color: #20201e; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 4px; }
 .action-orbit-step-1 { top: 105px; left: clamp(360px, 43vw, 490px); }.action-orbit-step-1 .action-orbit-marker { left: -18px; top: 61px; }.action-orbit-step-1::after { left: -21px; top: 127px; }
 .action-orbit-step-2 { top: 445px; left: clamp(405px, 48vw, 545px); }.action-orbit-step-2 .action-orbit-marker { left: -20px; top: 20px; }.action-orbit-step-2::after { left: -23px; top: -51px; }
 .action-orbit-step-3 { top: 448px; left: clamp(34px, 7vw, 88px); text-align: right; }.action-orbit-step-3 .action-orbit-marker { right: -20px; top: 20px; }.action-orbit-step-3::after { right: -23px; top: -51px; }.action-orbit-step-3 .action-orbit-detail { margin-left: auto; }
 .action-orbit-beacon { position: absolute; z-index: 3; width: 9px; height: 9px; border: 2px solid #f4f3ef; border-radius: 50%; background: #20201e; box-shadow: 0 0 0 1px #20201e; transition: top .65s cubic-bezier(.25,.75,.25,1), left .65s cubic-bezier(.25,.75,.25,1); pointer-events: none; }
 .action-orbit-beacon-1 { top: 163px; left: clamp(342px, calc(43vw - 18px), 472px); }.action-orbit-beacon-2 { top: 465px; left: clamp(385px, calc(48vw - 20px), 525px); }.action-orbit-beacon-3 { top: 465px; left: clamp(243px, calc(7vw + 204px), 292px); }
-.action-orbit-current { position: absolute; bottom: 28px; left: clamp(34px, 7vw, 88px); display: flex; align-items: center; gap: 8px; color: #8a8881; font-size: 9px; letter-spacing: .13em; text-transform: uppercase; }.action-orbit-current i { color: #6166cf; }
+.action-orbit-current { position: absolute; bottom: 28px; left: clamp(34px, 7vw, 88px); display: flex; align-items: center; gap: 8px; color: #8a8881; font-size: 9px; letter-spacing: .13em; text-transform: uppercase; }.action-orbit-current i { color: #20201e; }
+html.dark .action-orbit-current i { color: #f1f0ea; }
 @keyframes action-detail-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 720px) { .action-orbit { --orbit-size: 440px; min-height: 610px; }.action-orbit-inner { top: 73px; left: calc(50% - 220px); }.action-orbit-outer { top: 58px; left: calc(50% - 238px); }.action-orbit-center { top: 290px; left: calc(50% - 8px); }.action-orbit-step { width: 150px; }.action-orbit-number { font-size: 59px; }.action-orbit-step h3 { font-size: 9px; }.action-orbit-step-1 { top: 107px; left: calc(50% + 101px); }.action-orbit-step-2 { top: 382px; left: calc(50% + 112px); }.action-orbit-step-3 { top: 385px; left: calc(50% - 262px); }.action-orbit-step-1 .action-orbit-marker { left: -14px; top: 47px; }.action-orbit-step-2 .action-orbit-marker { left: -15px; top: 17px; }.action-orbit-step-3 .action-orbit-marker { right: -15px; top: 17px; }.action-orbit-step-1::after { left: -17px; top: 103px; }.action-orbit-step-2::after { left: -18px; top: -42px; }.action-orbit-step-3::after { right: -18px; top: -42px; }.action-orbit-beacon-1 { top: 152px; left: calc(50% + 87px); }.action-orbit-beacon-2 { top: 399px; left: calc(50% + 97px); }.action-orbit-beacon-3 { top: 402px; left: calc(50% - 127px); }.action-orbit-detail { width: 166px; font-size: 11px; }.action-orbit-step-3 .action-orbit-detail { margin-right: -9px; }.action-orbit-current { bottom: 22px; left: 50%; transform: translateX(-50%); white-space: nowrap; } }
 @media (prefers-reduced-motion: reduce) { .action-orbit *, .action-orbit *::after { animation: none !important; transition-duration: .01ms !important; } }

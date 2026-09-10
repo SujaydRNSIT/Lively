@@ -72,12 +72,12 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({ channelNam
     <div className="rounded-2xl border hairline bg-[#fdfdfb] dark:bg-[#121623] p-5 shadow-xs transition-colors">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b hairline">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#6166cf]/10 text-[#6166cf] border hairline">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-black/5 dark:bg-white/10 text-[#20201e] dark:text-[#f1f0ea] border hairline">
             <Calendar className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="editorial-mono text-[9.5px] uppercase tracking-[0.16em] font-semibold text-[#6166cf]">Confirmed Event</span>
+              <span className="editorial-mono text-[9.5px] uppercase tracking-[0.16em] font-semibold text-[#20201e] dark:text-[#f1f0ea]">Confirmed Event</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-[#10b981]/10 px-2 py-0.5 text-[9px] font-semibold text-[#10b981] border border-[#10b981]/20">
                 <CheckCircle className="h-2.5 w-2.5" />
                 Slot checked against the calendar
@@ -93,7 +93,7 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({ channelNam
               href={demoData.google_calendar_link}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#6166cf]/30 bg-[#6166cf]/10 hover:bg-[#6166cf]/20 text-[#6166cf] text-xs font-semibold shadow-xs transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800/80 dark:hover:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-xs font-semibold shadow-xs transition cursor-pointer"
             >
               <Calendar className="h-3.5 w-3.5" />
               <span>Add to Calendar</span>
@@ -104,7 +104,7 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({ channelNam
             href={meetingLink}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#6166cf] hover:bg-[#5257be] text-white text-xs font-semibold shadow-xs transition-transform active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#141416] hover:bg-[#222227] text-white dark:bg-[#18191e] dark:hover:bg-[#252730] dark:text-[#f4f3ef] border border-black/20 dark:border-white/15 text-xs font-semibold shadow-xs transition-transform active:scale-95 cursor-pointer"
           >
             <Video className="h-3.5 w-3.5" />
             <span>Join video room</span>
@@ -115,11 +115,11 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({ channelNam
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3 text-xs">
         <div className="flex items-center gap-2 text-[#4c4b46] dark:text-[#9aa0ad]">
-          <Clock className="h-4 w-4 text-[#6166cf] shrink-0" />
+          <Clock className="h-4 w-4 text-[#20201e] dark:text-[#e8e6e1] shrink-0" />
           <span><strong>Time:</strong> {demoData.time}</span>
         </div>
         <div className="flex items-center gap-2 text-[#4c4b46] dark:text-[#9aa0ad]">
-          <UserCheck className="h-4 w-4 text-[#6166cf] shrink-0" />
+          <UserCheck className="h-4 w-4 text-[#20201e] dark:text-[#e8e6e1] shrink-0" />
           <span><strong>Host:</strong> {host}</span>
         </div>
         <div className="flex items-center gap-2 text-[#4c4b46] dark:text-[#9aa0ad]">
@@ -131,20 +131,20 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({ channelNam
       <div className="mt-3 pt-3 border-t hairline bg-[#f7f6f0] dark:bg-[#181d2c] p-3.5 rounded-xl">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <p className="text-xs font-medium text-[#20201e] dark:text-[#f1f0ea] truncate">
-            Recipient: <span className="font-semibold text-[#6166cf]">{demoData.email || recipientEmail || 'No email yet — the agent will ask for one'}</span>
+            Recipient: <span className="font-semibold text-[#20201e] dark:text-[#f1f0ea] underline decoration-neutral-400 dark:decoration-neutral-600">{demoData.email || recipientEmail || 'No email yet — the agent will ask for one'}</span>
           </p>
           <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
             <button
               onClick={handleCopy}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#101420] text-xs font-medium text-[#4c4b46] dark:text-[#d1d5db] hover:bg-[#f3f2eb] dark:hover:bg-[#1e2436] transition cursor-pointer"
             >
-              {copied ? <Check className="h-3 w-3 text-[#10b981]" /> : <Copy className="h-3 w-3 text-[#6166cf]" />}
+              {copied ? <Check className="h-3 w-3 text-[#10b981]" /> : <Copy className="h-3 w-3 text-[#20201e] dark:text-[#e8e6e1]" />}
               <span>{copied ? 'Copied' : 'Copy room link'}</span>
             </button>
             <button
               onClick={handleSendInvite}
               disabled={isSending}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#101420] text-xs font-medium text-[#6166cf] hover:bg-[#6166cf]/10 transition cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hairline bg-white dark:bg-[#101420] text-xs font-medium text-[#20201e] dark:text-[#e8e6e1] hover:bg-[#f3f2eb] dark:hover:bg-[#1e2436] transition cursor-pointer disabled:opacity-50"
             >
               {isSending ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
               <span>{isSending ? 'Sending...' : 'Send invite'}</span>

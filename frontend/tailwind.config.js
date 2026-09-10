@@ -13,12 +13,12 @@ export default {
         'surface-border': '#1e2638',
         'surface-hover': '#182033',
         brand: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
+          50: '#f4f4f5',
+          100: '#e4e4e7',
+          400: '#71717a',
+          500: '#27272a',
+          600: '#18181b',
+          700: '#09090b',
         },
         agora: {
           blue: '#099dfd',
@@ -40,8 +40,8 @@ export default {
           '50%': { transform: 'scaleY(1.0)' },
         },
         glow: {
-          '0%': { boxShadow: '0 0 15px rgba(99, 102, 241, 0.3)' },
-          '100%': { boxShadow: '0 0 30px rgba(99, 102, 241, 0.8)' },
+          '0%': { boxShadow: '0 0 15px rgba(24, 24, 27, 0.3)' },
+          '100%': { boxShadow: '0 0 30px rgba(24, 24, 27, 0.7)' },
         }
       }
     },

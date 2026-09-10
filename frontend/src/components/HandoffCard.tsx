@@ -69,7 +69,7 @@ export const HandoffCard: React.FC<{ escalation: EscalationRecord }> = ({ escala
         <div className="mt-1 space-y-1.5">
           {escalation.recent_turns.slice(-6).map((turn, i) => (
             <p key={i} className="text-xs leading-5 text-[#3c3b37] dark:text-[#d1d5db]">
-              <span className="editorial-mono mr-2 text-[10px] uppercase text-[#6166cf]">{turn.role === 'buyer' ? 'Buyer' : 'Lively'}</span>
+              <span className="editorial-mono mr-2 text-[10px] uppercase text-[#20201e] dark:text-[#f1f0ea] font-semibold">{turn.role === 'buyer' ? 'Buyer' : 'Lively'}</span>
               {turn.content}
             </p>
           ))}
