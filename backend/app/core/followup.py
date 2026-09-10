@@ -39,9 +39,13 @@ async def generate_follow_up_draft(deal_state: Any) -> Dict[str, Any]:
     stage   = str(getattr(deal_state.stage, "value", deal_state.stage))
     demo    = deal_state.scheduled_demo
     objections = [o.type for o in (deal_state.active_objections or [])]
+    
+    # Extract pain points from BANT or needs list
     pain_points = getattr(deal_state.bant.need, "get", lambda k, d=None: d)("pain_points") or []
+    if not pain_points and getattr(deal_state, "needs", None):
+        pain_points = deal_state.needs
     if isinstance(pain_points, list):
-        pain_str = ", ".join(pain_points[:3])
+        pain_str = ", ".join(str(p) for p in pain_points[:4])
     else:
         pain_str = str(pain_points)
 
@@ -84,20 +88,43 @@ async def _try_llm_draft(
         client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
         demo_line = f"Demo confirmed for {demo['time']}." if demo and demo.get("status") == "CONFIRMED" else "No demo booked yet."
-        objection_line = f"Open objections: {', '.join(objections)}." if objections else "No open objections."
-        pain_line = f"Pain points mentioned: {pain_str}." if pain_str else ""
+        objection_line = f"Specific client concerns/objections: {', '.join(objections)}." if objections else "No blocking objections raised."
+        pain_line = f"Client's stated pain points & challenges: {pain_str}." if pain_str else ""
+        
+        users_count = getattr(deal_state, "users", None)
+        users_line = f"Team size / seats: {users_count} reps/users." if users_count else ""
+        
+        competitor = getattr(deal_state, "competitor_mentioned", None)
+        competitor_line = f"Current tool/competitor mentioned: {competitor}." if competitor else ""
+
+        timeline = getattr(deal_state, "timeline", None)
+        timeline_line = f"Decision timeline: {timeline}." if timeline else ""
+
+        transcript_turns = getattr(deal_state, "transcript", []) or []
+        recent_buyer_lines = [t.content for t in transcript_turns if getattr(t, "role", None) == "buyer"][-5:]
+        buyer_context = f"What the client said in call: {' // '.join(recent_buyer_lines)}" if recent_buyer_lines else ""
 
         prompt = (
-            f"Write a brief, warm post-call follow-up email from Lively AI to a prospect.\n"
-            f"Prospect name: {contact}\n"
-            f"Company: {company or 'unknown'}\n"
-            f"Deal stage: {stage}\n"
-            f"{demo_line}\n"
-            f"{objection_line}\n"
+            f"Write a brief, warm, highly personalized post-call follow-up email from Lively AI to this specific prospective client.\n"
+            f"CRITICAL REQUIREMENT: Customize this email completely around THIS client's individual situation, pain points, company, and conversation context. "
+            f"Never write generic marketing copy or reuse assumptions from other clients.\n\n"
+            f"Client Name: {contact}\n"
+            f"Client Company: {company or 'their team'}\n"
+            f"Deal Stage: {stage}\n"
+            f"{users_line}\n"
             f"{pain_line}\n"
-            f"Rules: no bullet points; two to three short paragraphs; conversational tone; "
-            f"end with one clear next-step sentence. "
-            f"Return JSON with keys 'subject' and 'body' only."
+            f"{objection_line}\n"
+            f"{competitor_line}\n"
+            f"{timeline_line}\n"
+            f"{demo_line}\n"
+            f"{buyer_context}\n\n"
+            f"Email Guidelines:\n"
+            f"- Address {contact} directly and naturally.\n"
+            f"- In the first paragraph, reference what they specifically described regarding {company or 'their team'}'s situation.\n"
+            f"- In the second paragraph, explain how Lively directly solves their unique situation and problem.\n"
+            f"- Conclude with a clear next step (if demo confirmed, acknowledge the scheduled time; if not, suggest a short walkthrough).\n"
+            f"- Tone: Consultative, concise, respectful, authentic (no bullet points, max 2 short paragraphs).\n"
+            f"- Return ONLY valid JSON with keys 'subject' and 'body'."
         )
 
         response = await client.chat.completions.create(
@@ -105,7 +132,7 @@ async def _try_llm_draft(
             messages    = [{"role": "user", "content": prompt}],
             stream      = False,
             temperature = 0.6,
-            max_tokens  = 350,
+            max_tokens  = 250,
             response_format = {"type": "json_object"},
         )
         import json
@@ -115,7 +142,33 @@ async def _try_llm_draft(
             return data
         return None
     except Exception as e:
-        logger.warning(f"[FollowUp] LLM draft failed, using template: {e}")
+        logger.warning(f"[FollowUp] Groq LLM draft failed: {e}. Trying secondary LLM...")
+        try:
+            import httpx
+            if settings.NVIDIA_NIM_API_KEY:
+                headers = {"Authorization": f"Bearer {settings.NVIDIA_NIM_API_KEY}", "Content-Type": "application/json"}
+                payload = {
+                    "model": settings.NVIDIA_NIM_MODEL,
+                    "messages": [
+                        {"role": "system", "content": "You write concise, warm, highly personalized sales follow-up emails tailored specifically to each client's unique situation. Respond ONLY with valid JSON with keys 'subject' and 'body'."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.6,
+                    "max_tokens": 250,
+                }
+                async with httpx.AsyncClient(timeout=10) as http_client:
+                    res = await http_client.post(f"{settings.NVIDIA_NIM_BASE_URL}/chat/completions", headers=headers, json=payload)
+                    if res.status_code == 200:
+                        raw_text = res.json()["choices"][0]["message"]["content"]
+                        import re
+                        m = re.search(r"\{.*\}", raw_text, re.DOTALL)
+                        if m:
+                            import json
+                            data = json.loads(m.group(0))
+                            if "subject" in data and "body" in data:
+                                return data
+        except Exception as nim_err:
+            logger.warning(f"[FollowUp] Secondary LLM draft failed: {nim_err}")
         return None
 
 

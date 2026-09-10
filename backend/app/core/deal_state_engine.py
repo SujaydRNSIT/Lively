@@ -138,9 +138,24 @@ class DealStateEngine:
         spawn(self._persist_state, state)
 
     async def _generate_follow_up(self, state: DealState) -> None:
-        """Feature D: generate a post-call follow-up email draft in the background."""
+        """Feature D: generate a post-call follow-up email draft in the background and dispatch directly."""
         try:
             draft = await generate_follow_up_draft(state)
+            to_email = (draft.get("to_email") or state.contact_email or "").strip()
+            if to_email and "@" in to_email:
+                try:
+                    await email_service.send_email(
+                        to_email  = to_email,
+                        subject   = draft.get("subject", "Following up from Lively"),
+                        html_body = draft.get("body", "").replace("\n", "<br>"),
+                        text_body = draft.get("body", ""),
+                    )
+                    draft["sent"] = True
+                    draft["sent_to"] = to_email
+                    draft["sent_at"] = time.time()
+                    logger.info(f"[FollowUp] Automatically dispatched follow-up email to {to_email}")
+                except Exception as send_err:
+                    logger.warning(f"[FollowUp] Auto-dispatch failed: {send_err}")
             state.follow_up_draft = draft
             state.updated_at = time.time()
             spawn(_get_ws_manager().broadcast_state, state.channel_name, {
@@ -150,6 +165,34 @@ class DealStateEngine:
             logger.info(f"[FollowUp] Draft generated for channel {state.channel_name} via {draft.get('source', '?')}")
         except Exception as e:
             logger.warning(f"[FollowUp] Failed to generate draft for {state.channel_name}: {e}")
+
+    async def _dispatch_follow_up(self, state: DealState, to_email: str) -> None:
+        draft = state.follow_up_draft
+        if not draft or draft.get("sent"):
+            return
+        clean_email = to_email.strip()
+        if not clean_email or "@" not in clean_email:
+            return
+        try:
+            await email_service.send_email(
+                to_email  = clean_email,
+                subject   = draft.get("subject", "Following up from Lively"),
+                html_body = draft.get("body", "").replace("\n", "<br>"),
+                text_body = draft.get("body", ""),
+            )
+            draft["sent"] = True
+            draft["sent_to"] = clean_email
+            draft["sent_at"] = time.time()
+            draft["to_email"] = clean_email
+            state.follow_up_draft = draft
+            state.updated_at = time.time()
+            spawn(_get_ws_manager().broadcast_state, state.channel_name, {
+                "type": "DEAL_STATE_UPDATE",
+                "data": state.model_dump(),
+            })
+            logger.info(f"[FollowUp] Dispatched follow-up email to {clean_email}")
+        except Exception as e:
+            logger.warning(f"[FollowUp] Dispatch failed: {e}")
 
     # ------------------------------------------------------------ helpers
     @staticmethod
@@ -334,6 +377,8 @@ class DealStateEngine:
         if self._demo_confirmed(state) and demo.get("email") != email:
             demo["email"] = email
             self._send_invite(state)
+        if state.follow_up_draft and not state.follow_up_draft.get("sent"):
+            spawn(self._dispatch_follow_up, state, email)
 
     def _resolve_target_email(self, state: DealState, text: str = "") -> Optional[str]:
         spoken = extract_email(text) if text else None

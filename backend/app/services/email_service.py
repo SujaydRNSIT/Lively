@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import asyncio
 import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -604,6 +605,61 @@ class EmailService:
         msg["To"] = to_email
         delivered, error = _smtp_send(msg, to_email)
         return {"delivered": delivered, "error": error}
+
+    async def send_email(
+        self,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        text_body: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Send an arbitrary HTML/plain text email to a recipient via configured SMTP.
+        Runs blocking SMTP operations in a worker thread.
+        """
+        clean_email = to_email.strip()
+        if not clean_email or "@" not in clean_email:
+            logger.warning(f"Invalid recipient email '{to_email}'")
+            return {"delivered": False, "error": "Invalid recipient email address"}
+
+        clean_user = settings.SMTP_USER.strip() if settings.SMTP_USER else None
+        from_header = f"{settings.SMTP_FROM_NAME or 'Lively AI'} <{clean_user}>" if clean_user else settings.SMTP_FROM
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = from_header
+        msg["To"] = clean_email
+
+        plain_text = text_body or re.sub(r"<[^>]+>", "", html_body)
+        msg.attach(MIMEText(plain_text, "plain", "utf-8"))
+        if html_body:
+            if not html_body.strip().lower().startswith("<!doctype") and not html_body.strip().lower().startswith("<html"):
+                formatted_html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #20201e; margin: 0; padding: 24px; background-color: #f7f6f2; }}
+    .container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e3dc; border-radius: 12px; padding: 32px; }}
+    .header {{ font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #696862; margin-bottom: 20px; }}
+    .content {{ font-size: 15px; color: #20201e; }}
+    .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #ebe8de; font-size: 12px; color: #8c8a82; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">Lively AI &bull; Follow-Up</div>
+    <div class="content">{html_body}</div>
+    <div class="footer">Sent from Lively AI Sales Cockpit</div>
+  </div>
+</body>
+</html>"""
+            else:
+                formatted_html = html_body
+            msg.attach(MIMEText(formatted_html, "html", "utf-8"))
+
+        delivered, error = await asyncio.to_thread(_smtp_send, msg, clean_email)
+        return {"delivered": delivered, "error": error, "recipient": clean_email}
 
 
 # Global singleton instance
