@@ -53,7 +53,22 @@ async def handle_chat_completion(
             user_utterance = extract_text(msg.content)
             break
 
-    if user_utterance:
+    # Strip accumulated prior sentences if ASR buffer prepended previous utterances
+    if user_utterance and deal_state and deal_state.transcript:
+        recent_buyer_turns = [t.content.strip() for t in reversed(deal_state.transcript) if t.role == "buyer"]
+        for past_text in recent_buyer_turns[:3]:
+            if past_text and past_text in user_utterance and len(user_utterance) > len(past_text) + 2:
+                user_utterance = user_utterance.replace(past_text, "").strip(" .,\n-")
+
+    # Check for rapid duplicate turns (debounce within 2.0s)
+    is_duplicate = False
+    now = time.time()
+    if deal_state.transcript:
+        last_turn = deal_state.transcript[-1]
+        if last_turn.role == "buyer" and last_turn.content.strip().lower() == user_utterance.strip().lower() and (now - last_turn.timestamp) < 2.0:
+            is_duplicate = True
+
+    if user_utterance and not is_duplicate:
         logger.info(f"User utterance extracted: '{user_utterance}'")
         deal_state_engine.record_turn(channel_name, role="buyer", text=user_utterance)
         state_snapshot = deal_state.model_dump()
@@ -76,6 +91,11 @@ async def handle_chat_completion(
         {"role": m.role, "content": extract_text(m.content)}
         for m in body.messages
     ]
+    if raw_messages and user_utterance:
+        for m in reversed(raw_messages):
+            if m["role"] == "user":
+                m["content"] = user_utterance
+                break
 
     # If Agora payload only sends the single latest turn, reconstruct full multi-turn context from deal_state.transcript
     if len(raw_messages) <= 1 and deal_state.transcript:

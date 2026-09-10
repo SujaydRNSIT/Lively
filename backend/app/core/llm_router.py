@@ -505,8 +505,15 @@ class LLMRouter:
                 text = "For an online clothing store with two hundred inquiries a month, AI can handle sizing questions, order tracking, and returns 24/7, routing high-intent buyers straight to your team."
 
         # 8. Objection diagnosis (Price / Replacing existing setup)
+        elif any(w in lower for w in ["why should i choose you", "why choose you", "why you", "why lively"]) and any(w in lower for w in ["expensive", "too much", "cost"]):
+            text = "Teams choose us because our voice agents handle real-time interruptions with sub-second latency, keeping callers engaged. If the price feels steep, what kind of budget would fit your volume?"
+        elif any(w in lower for w in ["why should i choose you", "why choose you", "why you", "why lively"]):
+            text = "Teams choose us because we provide sub-second voice latency over Agora's global network, so calls feel like talking to a real person rather than a robotic phone tree."
         elif any(w in lower for w in ["expensive", "too much", "cost too much", "costly", "too costly", "budget for this right now"]):
-            text = "Fair point. Is that compared to what you're spending now, or is it more about whether the call volume justifies the cost?"
+            if "spending now" in past_texts or "justifies the cost" in past_texts or "volume justifies" in past_texts:
+                text = "I hear you on the price point—budget is always key. What kind of number or pilot structure would make sense for your interactions?"
+            else:
+                text = "Fair point. Is that compared to what you're spending now, or is it more about whether the call volume justifies the cost?"
         elif any(w in lower for w in ["why would i replace", "salespeople already handle", "replace something that's working"]):
             text = "If your current process is working smoothly, I wouldn't suggest replacing it blindly. What's the one bottleneck your reps still run into?"
         elif any(w in lower for w in ["don't trust ai", "wrong answer", "hallucinat"]):

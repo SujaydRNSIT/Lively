@@ -94,20 +94,20 @@ class AgoraConvoAIService:
                 "turn_detection": {
                     "mode": "default",
                     "config": {
-                        "speech_threshold": 0.4,
+                        "speech_threshold": 0.5,
                         "start_of_speech": {
                             "mode": "vad",
                             "vad_config": {
-                                "interrupt_duration_ms": 160,
-                                "speaking_interrupt_duration_ms": 320,
+                                "interrupt_duration_ms": 240,
+                                "speaking_interrupt_duration_ms": 400,
                                 "prefix_padding_ms": 600
                             }
                         },
                         "end_of_speech": {
                             "mode": "semantic",
                             "semantic_config": {
-                                "silence_duration_ms": 320,
-                                "max_wait_ms": 2500
+                                "silence_duration_ms": 650,
+                                "max_wait_ms": 3000
                             }
                         }
                     }
