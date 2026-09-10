@@ -480,7 +480,7 @@ class LLMRouter:
 
         # Check if discovery was already performed in recent turns
         past_texts = " ".join([t.content.lower() for t in deal_state.transcript[-6:]]) if deal_state and deal_state.transcript else ""
-        already_asked_discovery = "trying to improve" in past_texts or "sales, customer follow-up" in past_texts
+        already_asked_discovery = "trying to improve" in past_texts or "sales, customer follow-up" in past_texts or "bottleneck" in past_texts or "biggest bottleneck" in past_texts
 
         # 0. Prompt Injection Guard
         if is_prompt_injection(user_msg):
@@ -499,8 +499,8 @@ class LLMRouter:
             text = "You shouldn't have to repeat yourself. Let's pick it up right from where you left off. What would you like to focus on right now?"
         elif any(w in lower for w in ["frustrated", "useless", "every ai tool"]):
             text = "Fair enough—a lot of bots out there are clunky phone trees. What let you down the most with the tools you've tried?"
-        elif any(w in lower for w in ["another ai chatbot", "🙄", "chatbot is exactly"]):
-            text = "Fair skepticism. Most chatbots are frustrating text widgets. We focus on natural voice calls that sound like a real conversation."
+        elif any(w in lower for w in ["chatbot", "chat bot", "a bot", "just a bot", "are you a bot", "like a chatbot", "another ai chatbot", "actually a chatbot", "🙄"]):
+            text = "Not like a traditional text chatbot, no. We build conversational voice agents that talk over real-time audio with sub-second latency, handle interruptions naturally, and qualify leads like a real sales rep."
 
         # 4. Off-topic queries (cricket, sports, weather)
         elif any(w in lower for w in ["cricket", "match yesterday", "who won", "football", "weather"]):

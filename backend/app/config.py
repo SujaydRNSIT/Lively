@@ -22,11 +22,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def resolve_backend_public_url(self) -> "Settings":
         render_url = os.getenv("RENDER_EXTERNAL_URL")
-        # If BACKEND_PUBLIC_URL is localhost or empty, and we are running on Render, auto-use Render URL
         if self.BACKEND_PUBLIC_URL in ("http://localhost:8000", "http://localhost:8000/", "", None) and render_url:
             self.BACKEND_PUBLIC_URL = render_url.rstrip("/")
         else:
             self.BACKEND_PUBLIC_URL = (self.BACKEND_PUBLIC_URL or "").rstrip("/")
+        if self.NVIDIA_NIM_MODEL in ("meta/llama-3.1-70b-instruct", "meta/llama-3.1-8b-instruct", "meta/llama-3.3-70b-instruct", "", None):
+            self.NVIDIA_NIM_MODEL = "meta/llama-3.2-11b-vision-instruct"
         return self
 
     # Internal / Client Auth
