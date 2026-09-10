@@ -236,8 +236,8 @@ export const SmartDialerPanel: React.FC = () => {
           Outbound Intelligence Engine
         </h2>
         <p className="mt-1.5 text-sm text-[#696862] dark:text-[#9aa0ad] max-w-xl">
-          Statistical pacing (binomial quantile) proposes a dial count.
-          The Safety Controller authorises the final number. AI agents handle overflow answers.
+          Statistical pacing calculates the required number of questions using a binomial model.
+          The Safety Controller approves the final count, while AI agents handle overflow.
         </p>
         <div className="mt-2 flex items-center gap-2 text-[10px] editorial-mono text-[#8c8a82]">
           <span className="px-2 py-0.5 rounded bg-[#f0efea] dark:bg-[#18191e]">Pacing proposes</span>
