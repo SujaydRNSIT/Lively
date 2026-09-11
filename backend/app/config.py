@@ -71,7 +71,7 @@ class Settings(BaseSettings):
 
     # Groq Settings (Primary low-latency LLM)
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "qwen/qwen3.8-27b"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     # Small, fast model that turns each buyer utterance into structured deal signals (intent, entities,
     # objections). If it does not answer within the timeout, the rule-based extractor is used instead.
     EXTRACTION_MODEL: str = "llama-3.1-8b-instant"

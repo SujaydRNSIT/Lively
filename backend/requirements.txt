@@ -14,4 +14,6 @@ pytest>=8.0.0
 pytest-asyncio>=0.23.0
 agora-token-builder>=1.0.0
 aiosqlite>=0.20.0
+pinecone>=5.0.0
+psycopg[binary]>=3.1.0
 

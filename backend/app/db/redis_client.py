@@ -16,9 +16,19 @@ class RedisClient:
 
     async def connect(self):
         if self.url:
+            clean_url = self.url.strip()
+            # Handle accidental CLI copy-paste like "redis-cli --tls -u redis://..."
+            if "redis://" in clean_url or "rediss://" in clean_url:
+                import re
+                m = re.search(r'(rediss?://\S+)', clean_url)
+                if m:
+                    clean_url = m.group(1)
+            # Ensure TLS protocol rediss:// for Upstash
+            if "upstash.io" in clean_url and clean_url.startswith("redis://"):
+                clean_url = "rediss://" + clean_url[len("redis://"):]
             try:
                 import redis.asyncio as aioredis
-                self._redis = aioredis.from_url(self.url, decode_responses=True)
+                self._redis = aioredis.from_url(clean_url, decode_responses=True)
                 await self._redis.ping()
                 logger.info("Connected to Redis instance.")
             except Exception as e:

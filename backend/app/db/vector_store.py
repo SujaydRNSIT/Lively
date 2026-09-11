@@ -1,5 +1,11 @@
+
+
+import os
 import logging
 from typing import List, Dict, Any
+
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("USE_TORCH", "1")
 
 from app.config import settings
 

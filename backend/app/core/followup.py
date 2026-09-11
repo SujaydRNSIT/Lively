@@ -127,19 +127,24 @@ async def _try_llm_draft(
             f"- Return ONLY valid JSON with keys 'subject' and 'body'."
         )
 
-        response = await client.chat.completions.create(
-            model       = settings.GROQ_MODEL,
-            messages    = [{"role": "user", "content": prompt}],
-            stream      = False,
-            temperature = 0.6,
-            max_tokens  = 250,
-            response_format = {"type": "json_object"},
-        )
-        import json
+        groq_kwargs = {
+            "model": settings.GROQ_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "temperature": 0.6,
+            "max_tokens": 450,
+        }
+        if "gpt-oss" not in settings.GROQ_MODEL.lower():
+            groq_kwargs["response_format"] = {"type": "json_object"}
+
+        response = await client.chat.completions.create(**groq_kwargs)
+        import json, re
         content = response.choices[0].message.content or ""
-        data    = json.loads(content)
-        if "subject" in data and "body" in data:
-            return data
+        m = re.search(r"\{.*\}", content, re.DOTALL)
+        if m:
+            data = json.loads(m.group(0))
+            if "subject" in data and "body" in data:
+                return data
         return None
     except Exception as e:
         logger.warning(f"[FollowUp] Groq LLM draft failed: {e}. Trying secondary LLM...")

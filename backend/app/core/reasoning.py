@@ -103,7 +103,10 @@ def _build_heard(u: Dict[str, Any]) -> str:
 
     objs = u.get("objections") or []
     if objs:
-        obj_labels = [_OBJECTION_LABELS.get(o.get("type", ""), o.get("type", "")) for o in objs[:2]]
+        obj_labels = []
+        for o in objs[:2]:
+            o_type = o.get("type", "") if isinstance(o, dict) else str(o)
+            obj_labels.append(_OBJECTION_LABELS.get(o_type, o_type))
         parts.append(f"objection: {', '.join(obj_labels)}")
 
     if u.get("wants_human"):
@@ -141,7 +144,7 @@ def _build_decided(u: Dict[str, Any]) -> str:
         return "Route → demo scheduling (buyer signalled intent to book)"
 
     if objs:
-        types = [o.get("type", "") for o in objs]
+        types = [o.get("type", "") if isinstance(o, dict) else str(o) for o in objs]
         if "pricing" in types:
             return "Route → pricing objection handling (rebuttal: explore comparison budget)"
         if "competitor" in types:

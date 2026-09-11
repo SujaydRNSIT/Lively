@@ -320,7 +320,9 @@ class LLMRouter:
         if is_prompt_injection(latest_user_msg):
             sources.append(("security-guard", lambda: self._stream_text(GUARD_TEXT)))
         else:
-            max_tokens = 130 if self.is_objection_or_complex_turn(latest_user_msg, deal_state) else 90
+            base_tokens = 200 if "gpt-oss" in settings.GROQ_MODEL.lower() else 90
+            complex_tokens = 250 if "gpt-oss" in settings.GROQ_MODEL.lower() else 130
+            max_tokens = complex_tokens if self.is_objection_or_complex_turn(latest_user_msg, deal_state) else base_tokens
             augmented = [{"role": "system", "content": self.construct_system_prompt(deal_state, latest_user_msg)}]
             augmented += [m for m in messages if m.get("role") != "system"]
             if self.groq_client:
