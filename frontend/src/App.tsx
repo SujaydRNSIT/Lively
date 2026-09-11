@@ -153,20 +153,45 @@ export const App: React.FC = () => {
     }
   }, [theme]);
 
-  // Share the visitor's email with their own channel (used for the demo invite)
+  // Share the visitor's email with their own channel (used for the demo invite & follow-up)
   useEffect(() => {
-    if (channelName && EMAIL_PATTERN.test(userEmail)) {
-      setUserContact(channelName, userEmail, userName || undefined).catch(() => {});
+    const cleanEmail = (userEmail || '').trim().toLowerCase();
+    if (channelName && EMAIL_PATTERN.test(cleanEmail)) {
+      setUserContact(channelName, cleanEmail, userName || undefined)
+        .then(updated => {
+          if (updated) {
+            setDealState(prev => ({
+              ...prev,
+              contact_email: cleanEmail,
+              crm_lead: { ...prev.crm_lead, contact_email: cleanEmail }
+            }));
+          }
+        })
+        .catch(() => {});
     }
   }, [channelName, userEmail, userName]);
 
   const handleSaveContact = async (email: string, name?: string, company?: string) => {
-    setUserEmail(email);
+    const cleanEmail = (email || '').trim().toLowerCase();
+    setUserEmail(cleanEmail);
     if (name) setUserName(name);
+    try {
+      localStorage.setItem('lively_user_email', cleanEmail);
+      if (name) localStorage.setItem('lively_user_name', name);
+      if (company) localStorage.setItem('lively_user_company', company);
+    } catch {}
     if (!channelName) return;
     try {
-      const updatedState = await setUserContact(channelName, email, name, company);
-      if (updatedState) setDealState(updatedState);
+      const updatedState = await setUserContact(channelName, cleanEmail, name, company);
+      if (updatedState) {
+        setDealState(updatedState);
+      } else {
+        setDealState(prev => ({
+          ...prev,
+          contact_email: cleanEmail,
+          crm_lead: { ...prev.crm_lead, contact_email: cleanEmail }
+        }));
+      }
     } catch (err) {
       console.error('Failed to sync contact with backend:', err);
     }
@@ -177,10 +202,19 @@ export const App: React.FC = () => {
   const handleResetSession = async () => {
     try {
       const fresh = await resetDealState(channelName);
-      setDealState(fresh || { ...INITIAL_DEAL_STATE, channel_name: channelName });
+      const cleanEmail = (userEmail || '').trim().toLowerCase();
+      if (cleanEmail && EMAIL_PATTERN.test(cleanEmail)) {
+        setUserContact(channelName, cleanEmail, userName || undefined).catch(() => {});
+      }
+      setDealState(fresh ? {
+        ...fresh,
+        contact_email: cleanEmail || fresh.contact_email,
+        crm_lead: { ...fresh.crm_lead, contact_email: cleanEmail || fresh.crm_lead.contact_email }
+      } : { ...INITIAL_DEAL_STATE, channel_name: channelName, contact_email: cleanEmail });
     } catch (e) {
       console.warn('Reset error, falling back to local initial state:', e);
-      setDealState({ ...INITIAL_DEAL_STATE, channel_name: channelName });
+      const cleanEmail = (userEmail || '').trim().toLowerCase();
+      setDealState({ ...INITIAL_DEAL_STATE, channel_name: channelName, contact_email: cleanEmail });
     }
   };
 

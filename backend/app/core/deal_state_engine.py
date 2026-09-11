@@ -459,11 +459,23 @@ class DealStateEngine:
         if slot is None and agreed and proposal:
             slot = (day or proposal[0], time_str or proposal[1])
         if slot is None:
-            if request in ("request", "reschedule") or (agreed and agent_asked):
-                if not state.pending_demo_request:
-                    self._log(state, "demo_request", None, None, "Buyer wants a demo; offering open slots.")
-                state.pending_demo_request = True
-            return
+            wants_demo = (
+                request in ("request", "reschedule")
+                or (agreed and agent_asked)
+                or u.get("intent") == "request_demo"
+                or any(phrase in lower for phrase in ("looking for a demo", "want a demo", "see a demo", "give me a demo", "send me a demo", "schedule a demo", "book a demo", "demo link", "demo meeting"))
+            )
+            if wants_demo:
+                # As soon as user looks for a demo, auto-reserve earliest open slot and dispatch invite to their email
+                if not confirmed and offered:
+                    slot = ("label", offered[0])
+                else:
+                    if not state.pending_demo_request:
+                        self._log(state, "demo_request", None, None, "Buyer wants a demo; offering open slots.")
+                    state.pending_demo_request = True
+                    return
+            else:
+                return
         self._book(state, slot, text, lower)
 
     def _book(self, state: DealState, slot: Tuple[str, str], text: str, lower: str) -> Optional[Dict[str, Any]]:

@@ -32,8 +32,8 @@ async def set_deal_contact(channel_name: str, req: SetContactRequest):
     """
     Sets the prospect's contact details. If a demo is already booked, the invite goes to this address.
     """
-    clean_email = req.email.strip()
-    if extract_email(clean_email) != clean_email:
+    clean_email = (req.email or "").strip().lower()
+    if not clean_email or "@" not in clean_email or "." not in clean_email:
         raise HTTPException(status_code=400, detail="A valid email address is required.")
 
     state = deal_state_engine.set_contact(channel_name, clean_email, req.name, req.company)
