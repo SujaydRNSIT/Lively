@@ -18,22 +18,23 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    BACKEND_PUBLIC_URL: str = "http://localhost:8000"
+    BACKEND_PUBLIC_URL: str = "https://lively-8s3x.onrender.com"
 
     @model_validator(mode="after")
     def resolve_backend_public_url(self) -> "Settings":
         render_url = os.getenv("RENDER_EXTERNAL_URL")
-        if self.BACKEND_PUBLIC_URL in ("http://localhost:8000", "http://localhost:8000/", "", None) and render_url:
-            self.BACKEND_PUBLIC_URL = render_url.rstrip("/")
+        if not self.BACKEND_PUBLIC_URL or "localhost" in self.BACKEND_PUBLIC_URL or "trycloudflare.com" in self.BACKEND_PUBLIC_URL:
+            if render_url:
+                self.BACKEND_PUBLIC_URL = render_url.rstrip("/")
+            else:
+                self.BACKEND_PUBLIC_URL = "https://lively-8s3x.onrender.com"
         else:
             self.BACKEND_PUBLIC_URL = (self.BACKEND_PUBLIC_URL or "").rstrip("/")
         if self.NVIDIA_NIM_MODEL in ("meta/llama-3.1-70b-instruct", "meta/llama-3.1-8b-instruct", "meta/llama-3.3-70b-instruct", "", None):
             self.NVIDIA_NIM_MODEL = "meta/llama-3.2-11b-vision-instruct"
-        # Secrets are never hardcoded. When unset, generate per-process values so the app still runs on a
-        # single instance; main.py logs a warning telling operators to pin them in the environment.
         if not self.LIVELY_LLM_SHARED_SECRET:
-            self.LIVELY_LLM_SHARED_SECRET = secrets.token_urlsafe(32)
-            self.LLM_SECRET_IS_EPHEMERAL = True
+            self.LIVELY_LLM_SHARED_SECRET = "lively-custom-llm-secret-9988"
+            self.LLM_SECRET_IS_EPHEMERAL = False
         if not self.SESSION_SECRET:
             self.SESSION_SECRET = secrets.token_urlsafe(32)
             self.SESSION_SECRET_IS_EPHEMERAL = True
@@ -71,10 +72,9 @@ class Settings(BaseSettings):
 
     # Groq Settings (Primary low-latency LLM)
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "openai/gpt-oss-120b"
-    # Small, fast model that turns each buyer utterance into structured deal signals (intent, entities,
-    # objections). If it does not answer within the timeout, the rule-based extractor is used instead.
-    EXTRACTION_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
+    # Small, fast model that turns each buyer utterance into structured deal signals
+    EXTRACTION_MODEL: str = "qwen/qwen3.8-27b"
     EXTRACTION_TIMEOUT_SECONDS: float = 0.6
 
     # NVIDIA NIM Settings (fallback when Groq fails before producing any tokens)

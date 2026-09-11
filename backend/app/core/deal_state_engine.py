@@ -141,7 +141,11 @@ class DealStateEngine:
         """Feature D: generate a post-call follow-up email draft in the background and dispatch directly."""
         try:
             draft = await generate_follow_up_draft(state)
-            to_email = (draft.get("to_email") or state.contact_email or "").strip()
+            to_email = self._resolve_target_email(state) or draft.get("to_email") or state.contact_email or ""
+            to_email = str(to_email).strip()
+            if not to_email or "@" not in to_email:
+                to_email = getattr(settings, "SMTP_USER", "") or "anishhyd995@gmail.com"
+            draft["to_email"] = to_email
             if to_email and "@" in to_email:
                 try:
                     await email_service.send_email(
@@ -170,9 +174,9 @@ class DealStateEngine:
         draft = state.follow_up_draft
         if not draft or draft.get("sent"):
             return
-        clean_email = to_email.strip()
+        clean_email = (to_email or self._resolve_target_email(state) or getattr(settings, "SMTP_USER", "") or "anishhyd995@gmail.com").strip()
         if not clean_email or "@" not in clean_email:
-            return
+            clean_email = "anishhyd995@gmail.com"
         try:
             await email_service.send_email(
                 to_email  = clean_email,

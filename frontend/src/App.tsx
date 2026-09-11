@@ -257,7 +257,22 @@ export const App: React.FC = () => {
               setAgentStatus(msg.data.status);
             } else if (msg.type === 'TRANSCRIPT_TURN') {
               setAgentStatus(msg.data.role === 'agent' ? 'speaking' : 'listening');
-              if (msg.data.deal_state) setDealState(msg.data.deal_state);
+              if (msg.data.deal_state) {
+                setDealState(msg.data.deal_state);
+              } else if (msg.data.role && (msg.data.text || msg.data.content)) {
+                const turnText = msg.data.text || msg.data.content;
+                setDealState(prev => ({
+                  ...prev,
+                  transcript: [
+                    ...prev.transcript,
+                    {
+                      role: msg.data.role,
+                      content: turnText,
+                      timestamp: Date.now() / 1000
+                    }
+                  ]
+                }));
+              }
             } else if (msg.type === 'AGENT_REASONING') {
               // Feature A: update the decision trace panel
               setAgentReasoning(msg.data);

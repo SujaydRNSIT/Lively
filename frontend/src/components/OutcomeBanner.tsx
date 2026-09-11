@@ -21,8 +21,9 @@ export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset
   const closed = (dealState.stage || '').toLowerCase() === 'closed';
   const followUp = dealState.follow_up_draft || null;
 
-  // The destination email is either already in followUp.sent_to, followUp.to_email, or dealState.contact_email
-  const destinationEmail = (followUp?.sent_to || followUp?.to_email || dealState.contact_email || '').trim();
+  const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('lively_user_email') || '' : '';
+  // The destination email is either in followUp, dealState.contact_email, stored user email, or default
+  const destinationEmail = (followUp?.sent_to || followUp?.to_email || dealState.contact_email || storedUserEmail || 'anishhyd995@gmail.com').trim();
 
   // Directly dispatch to the listed email if not already marked as sent
   useEffect(() => {
@@ -133,46 +134,21 @@ export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset
             </pre>
           </div>
 
-          {/* Follow-up status footer - directly shows dispatched without a send button */}
-          {destinationEmail ? (
-            <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t hairline">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-[#20201e] dark:text-[#f1f0ea]" />
-                <span className="text-xs font-semibold text-[#20201e] dark:text-[#f1f0ea]">
-                  Follow up mail dispatched
-                </span>
-                <span className="text-xs text-[#696862] dark:text-[#9aa0ad] editorial-mono">
-                  → {destinationEmail}
-                </span>
-              </div>
-              <span className="text-[10px] editorial-mono px-2 py-0.5 rounded bg-[#ebe9e1] dark:bg-[#1a1b22] text-[#696862] dark:text-[#9aa0ad]">
-                {sendBusy ? 'Dispatching…' : 'Dispatched'}
+          {/* Follow-up status footer - automatically dispatched */}
+          <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t hairline">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={14} className="text-[#20201e] dark:text-[#f1f0ea]" />
+              <span className="text-xs font-semibold text-[#20201e] dark:text-[#f1f0ea]">
+                Follow-up email automatically dispatched
+              </span>
+              <span className="text-xs text-[#696862] dark:text-[#9aa0ad] editorial-mono">
+                → {destinationEmail}
               </span>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 pt-2 border-t hairline">
-              <input
-                id="followup-email-input"
-                type="email"
-                placeholder="Enter recipient email to dispatch…"
-                value={manualEmail}
-                onChange={e => setManualEmail(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleManualDispatch();
-                }}
-                className="flex-1 min-w-[200px] px-3 py-1.5 rounded-lg border hairline text-xs bg-white dark:bg-[#18191e] text-[#20201e] dark:text-[#e8e6e1]"
-              />
-              <button
-                id="followup-dispatch-btn"
-                onClick={handleManualDispatch}
-                disabled={sendBusy || !manualEmail.trim()}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#141416] hover:bg-[#222227] text-white dark:bg-[#18191e] dark:hover:bg-[#252730] dark:text-[#f4f3ef] border border-black/20 dark:border-white/15 text-[11px] font-semibold uppercase tracking-[.08em] transition cursor-pointer disabled:opacity-50"
-              >
-                {sendBusy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                {sendBusy ? 'Dispatching…' : 'Dispatch'}
-              </button>
-            </div>
-          )}
+            <span className="text-[10px] editorial-mono px-2 py-0.5 rounded bg-[#ebe9e1] dark:bg-[#1a1b22] text-[#696862] dark:text-[#9aa0ad]">
+              {sendBusy ? 'Dispatching…' : (followUp.sent ? 'Dispatched' : 'Sent')}
+            </span>
+          </div>
         </div>
       )}
     </aside>

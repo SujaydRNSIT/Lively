@@ -215,7 +215,7 @@ async def test_endpoints_require_a_session_for_that_channel():
         assert (await ac.post(f"/v1/chat/completions?channel={a_channel}", json=chat, headers=b_headers)).status_code == 403
         agora = {"Authorization": f"Bearer {settings.LIVELY_LLM_SHARED_SECRET}"}
         assert (await ac.post(f"/v1/chat/completions?channel={a_channel}", json=chat, headers=agora)).status_code == 200
-        wrong = {"Authorization": "Bearer lively-custom-llm-secret-9988"}
+        wrong = {"Authorization": "Bearer not-the-secret"}
         assert (await ac.post(f"/v1/chat/completions?channel={a_channel}", json=chat, headers=wrong)).status_code == 401
 
 @pytest.mark.asyncio

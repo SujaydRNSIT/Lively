@@ -8,6 +8,7 @@ from app.core.security import require_channel_access, parse_session_token
 from app.services.agora_convo_api import agora_convo_service
 from app.services.agora_token import build_rtc_token
 from app.db.redis_client import redis_client
+from app.core.deal_state_engine import deal_state_engine
 
 logger = logging.getLogger("lively.api.agora_agent")
 router = APIRouter(prefix="/api/agent", tags=["agent_session"])
@@ -119,6 +120,7 @@ async def stop_agent_session(
     res = await agora_convo_service.stop_agent(agent_id)
     await redis_client.delete(f"session:{req.channel_name}")
     await redis_client.delete(f"agent:{agent_id}")
+    deal_state_engine.record_turn(req.channel_name, role="system", text="[CALL_ENDED]")
     return {"status": "success", "result": res}
 
 @router.get("/status/{agent_id}")
