@@ -67,7 +67,10 @@ def extract_email(text: str) -> Optional[str]:
         return f"{m.group(1)}@{m.group(2)}.{m.group(3)}".lower()
     m = SPOKEN_EMAIL_RE.search(text)
     if m:
-        user = re.sub(r"\s+", "", m.group(1)).lower()
+        raw_user = m.group(1).lower()
+        if " dot " in raw_user or "dot" in raw_user.split():
+            return None
+        user = re.sub(r"\s+", "", raw_user)
         domain = m.group(2).lower().replace(" ", "")
         tld = m.group(3).lower()
         return f"{user}@{domain}.{tld}"

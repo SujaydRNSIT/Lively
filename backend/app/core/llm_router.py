@@ -277,6 +277,22 @@ class LLMRouter:
         elif decision_maker is False:
             role += " (not the final decision maker)"
 
+        dd = deal_state.deal_desk
+        if dd:
+            status = dd.get("status")
+            auth_pct = float(dd.get("authorised_pct") or 0)
+            prop_pct = float(dd.get("proposed_pct") or 0)
+            if status == "approved":
+                concession_status = f"APPROVED concession of {auth_pct:.0f}% off. Quote the deduced price to the buyer (e.g. Starter $199/mo becomes ${(199*(1-auth_pct/100)):.0f}/mo; Growth $699/mo becomes ${(699*(1-auth_pct/100)):.0f}/mo)."
+            elif status == "pending_manager":
+                concession_status = f"PENDING manager approval for {prop_pct:.0f}%. Inform the buyer that discounts above 15% require manager sign-off or an annual commitment."
+            elif status == "refused":
+                concession_status = f"REFUSED concession ({prop_pct:.0f}% exceeds corporate hard ceiling of 25%). Firmly and politely decline the discount."
+            else:
+                concession_status = "None"
+        else:
+            concession_status = "Standard pricing. You may grant up to 15% discount autonomously if negotiated."
+
         stage_val = deal_state.stage.value if hasattr(deal_state.stage, "value") else str(deal_state.stage)
         return LIVELY_SYSTEM_PROMPT.format(
             stage=stage_val,
@@ -293,6 +309,7 @@ class LLMRouter:
             scheduling_note=scheduling_note,
             available_slots=", ".join(deal_state.available_slots) or "None in the next three weeks",
             escalation=escalation,
+            concession_status=concession_status,
             next_best_action=deal_state.next_best_action,
             rag_context=rag_context
         )

@@ -11,6 +11,7 @@ from app.models.schemas import DealState, ChatTurn, ObjectionRecord, DealStageEn
 from app.core.decision import decision_engine, REBUTTALS
 from app.core.understanding import (
     rule_based_understanding, extract_email, extract_day, extract_time, extract_duration, duration_minutes, OBJECTION_TYPES,
+    CAPABILITY_QUERY_RE,
 )
 from app.core.background import run_blocking, spawn
 from app.core.security import rate_limiter
@@ -459,16 +460,22 @@ class DealStateEngine:
         if slot is None and agreed and proposal:
             slot = (day or proposal[0], time_str or proposal[1])
         if slot is None:
-            wants_demo = (
+            is_capability_query = bool(CAPABILITY_QUERY_RE.search(lower)) or "demo of your voice" in lower
+            wants_demo = not is_capability_query and (
                 request in ("request", "reschedule")
                 or (agreed and agent_asked)
                 or u.get("intent") == "request_demo"
-                or any(phrase in lower for phrase in ("looking for a demo", "want a demo", "see a demo", "give me a demo", "send me a demo", "schedule a demo", "book a demo", "demo link", "demo meeting"))
+                or any(phrase in lower for phrase in ("looking for a demo", "send me the demo", "demo link", "demo meeting"))
             )
             if wants_demo:
-                # As soon as user looks for a demo, auto-reserve earliest open slot and dispatch invite to their email
-                if not confirmed and offered:
-                    slot = ("label", offered[0])
+                # If the user already has an email captured and explicitly signals "looking for a demo" / demo link,
+                # auto-dispatch the earliest slot invite to their entered email.
+                if state.contact_email and any(phrase in lower for phrase in ("looking for a demo", "demo link", "send", "invite")):
+                    if not confirmed and offered:
+                        slot = ("label", offered[0])
+                    else:
+                        state.pending_demo_request = True
+                        return
                 else:
                     if not state.pending_demo_request:
                         self._log(state, "demo_request", None, None, "Buyer wants a demo; offering open slots.")
