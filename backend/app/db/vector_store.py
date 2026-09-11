@@ -1,5 +1,3 @@
-
-
 import os
 import logging
 from typing import List, Dict, Any
@@ -11,17 +9,18 @@ from app.config import settings
 
 logger = logging.getLogger("lively.db.vector_store")
 
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384
 
 
 class PineconeVectorStore:
-    """Pinecone-backed vector store with local sentence-transformer embeddings."""
+    """Pinecone-backed vector store with lightweight FastEmbed/SentenceTransformer embeddings."""
 
     def __init__(self):
         self._pc = None
         self._index = None
         self._encoder = None
+        self._fast_encoder = None
         self._namespace = settings.PINECONE_NAMESPACE
         self._index_name = settings.PINECONE_INDEX_NAME
         self._initialized = False
@@ -38,7 +37,6 @@ class PineconeVectorStore:
 
         try:
             from pinecone import Pinecone, ServerlessSpec
-            from sentence_transformers import SentenceTransformer
 
             self._pc = Pinecone(api_key=settings.PINECONE_API_KEY)
             existing = [idx.name for idx in self._pc.list_indexes()]
@@ -50,22 +48,39 @@ class PineconeVectorStore:
                     spec=ServerlessSpec(cloud="aws", region="us-east-1"),
                 )
             self._index = self._pc.Index(self._index_name)
-            # Force device="cpu" to prevent CUDA kernel mismatches on newer GPUs (e.g. RTX 50-series)
-            self._encoder = SentenceTransformer(EMBEDDING_MODEL, device="cpu")
-            logger.info(f"Pinecone index '{self._index_name}' ready ({EMBEDDING_DIM}d, cosine) using CPU encoder")
+
+            # Try FastEmbed first (fast ONNX, lightweight, no TF/torch conflicts)
+            self._fast_encoder = None
+            try:
+                from fastembed import TextEmbedding
+                self._fast_encoder = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2")
+                logger.info(f"Pinecone index '{self._index_name}' ready ({EMBEDDING_DIM}d, cosine) using FastEmbed")
+            except Exception as fe_err:
+                logger.info(f"FastEmbed not available ({fe_err}), trying SentenceTransformer")
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    self._encoder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+                    logger.info(f"Pinecone index '{self._index_name}' ready ({EMBEDDING_DIM}d, cosine) using CPU encoder")
+                except Exception as st_err:
+                    logger.warning(f"Could not load SentenceTransformer ({st_err}). Using in-memory keyword RAG.")
         except Exception as e:
-            logger.warning(f"Failed to initialize Pinecone/SentenceTransformer ({e}). Falling back to in-memory store.")
+            logger.warning(f"Failed to initialize Pinecone/Embedding ({e}). Falling back to in-memory store.")
             self._index = None
             self._encoder = None
+            self._fast_encoder = None
 
     def _embed(self, text: str) -> List[float]:
-        if not self._encoder:
-            return []
-        try:
-            return self._encoder.encode(text, normalize_embeddings=True, device="cpu").tolist()
-        except Exception as e:
-            logger.warning(f"Embedding error on CPU: {e}")
-            return []
+        if getattr(self, "_fast_encoder", None):
+            try:
+                return list(self._fast_encoder.embed([text]))[0].tolist()
+            except Exception as e:
+                logger.warning(f"FastEmbed error: {e}")
+        if getattr(self, "_encoder", None):
+            try:
+                return self._encoder.encode(text, normalize_embeddings=True, device="cpu").tolist()
+            except Exception as e:
+                logger.warning(f"Embedding error on CPU: {e}")
+        return []
 
     def _fallback_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
         """Keyword fallback when Pinecone is not configured."""
@@ -88,7 +103,7 @@ class PineconeVectorStore:
     def upsert_documents(self, documents: List[Dict[str, Any]]):
         """Upsert a batch of documents into Pinecone."""
         self._ensure_init()
-        if self._index is None:
+        if self._index is None or (not self._fast_encoder and not self._encoder):
             self._fallback_docs.extend(documents)
             logger.info(f"Stored {len(documents)} docs in-memory (no Pinecone)")
             return
@@ -96,9 +111,12 @@ class PineconeVectorStore:
         vectors = []
         for doc in documents:
             text = f"{doc['title']}. {doc['content']}"
+            vec = self._embed(text)
+            if not vec:
+                continue
             vectors.append({
                 "id": doc["doc_id"],
-                "values": self._embed(text),
+                "values": vec,
                 "metadata": {
                     "title": doc["title"],
                     "category": doc["category"],
@@ -106,44 +124,42 @@ class PineconeVectorStore:
                     "keywords": ",".join(doc.get("keywords", [])),
                 },
             })
-        self._index.upsert(vectors=vectors, namespace=self._namespace)
-        logger.info(f"Upserted {len(vectors)} documents to Pinecone index '{self._index_name}'")
+        if vectors:
+            self._index.upsert(vectors=vectors, namespace=self._namespace)
+            logger.info(f"Upserted {len(vectors)} documents to Pinecone index '{self._index_name}'")
 
     def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
         """Semantic search via Pinecone. Returns list of doc dicts."""
         self._ensure_init()
-        if self._index is None:
+        if self._index is None or (not self._fast_encoder and not self._encoder):
             return self._fallback_search(query, top_k)
 
         query_vec = self._embed(query)
-        results = self._index.query(
-            vector=query_vec,
-            top_k=top_k,
-            namespace=self._namespace,
-            include_metadata=True,
-        )
-        hits = []
-        for match in results.get("matches", []):
-            meta = match.get("metadata", {})
-            hits.append({
-                "doc_id": match["id"],
-                "title": meta.get("title", ""),
-                "category": meta.get("category", ""),
-                "content": meta.get("content", ""),
-                "keywords": meta.get("keywords", "").split(",") if meta.get("keywords") else [],
-                "score": match.get("score", 0.0),
-            })
-        return hits
+        if not query_vec:
+            return self._fallback_search(query, top_k)
 
-    def add_document(self, doc_id: str, title: str, category: str, content: str, keywords: List[str]):
-        """Single-doc convenience wrapper."""
-        self.upsert_documents([{
-            "doc_id": doc_id,
-            "title": title,
-            "category": category,
-            "content": content,
-            "keywords": keywords,
-        }])
+        try:
+            results = self._index.query(
+                vector=query_vec,
+                top_k=top_k,
+                namespace=self._namespace,
+                include_metadata=True,
+            )
+            matched = []
+            for match in results.get("matches", []):
+                meta = match.get("metadata", {})
+                matched.append({
+                    "doc_id": match["id"],
+                    "title": meta.get("title", ""),
+                    "category": meta.get("category", ""),
+                    "content": meta.get("content", ""),
+                    "score": match.get("score", 0.0),
+                    "keywords": [k.strip() for k in meta.get("keywords", "").split(",") if k.strip()],
+                })
+            return matched if matched else self._fallback_search(query, top_k)
+        except Exception as e:
+            logger.warning(f"Pinecone query failed ({e}); using fallback search")
+            return self._fallback_search(query, top_k)
 
 
 vector_store = PineconeVectorStore()

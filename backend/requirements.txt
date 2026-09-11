@@ -16,4 +16,6 @@ agora-token-builder>=1.0.0
 aiosqlite>=0.20.0
 pinecone>=5.0.0
 psycopg[binary]>=3.1.0
+asyncpg>=0.29.0
+fastembed>=0.2.0
 

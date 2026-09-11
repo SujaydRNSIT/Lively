@@ -60,7 +60,7 @@ app.include_router(deal_state.router)
 app.include_router(telemetry.router)
 app.include_router(dialer_router)
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {
         "service": "Lively Intelligence Core",
@@ -83,7 +83,7 @@ async def root():
         }
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "healthy", "service": "lively-core"}
 
