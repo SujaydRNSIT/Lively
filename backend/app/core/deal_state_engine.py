@@ -148,20 +148,21 @@ class DealStateEngine:
             draft["to_email"] = to_email
             if to_email and "@" in to_email:
                 try:
-                    await email_service.send_email(
+                    res = await email_service.send_email(
                         to_email  = to_email,
                         subject   = draft.get("subject", "Following up from Lively"),
                         html_body = draft.get("body", "").replace("\n", "<br>"),
                         text_body = draft.get("body", ""),
                     )
-                    draft["sent"] = True
+                    draft["sent"] = bool(res.get("delivered", False))
                     draft["sent_to"] = to_email
                     draft["sent_at"] = time.time()
-                    logger.info(f"[FollowUp] Automatically dispatched follow-up email to {to_email}")
+                    logger.info(f"[FollowUp] Dispatched follow-up email to {to_email} (delivered={draft['sent']})")
                 except Exception as send_err:
                     logger.warning(f"[FollowUp] Auto-dispatch failed: {send_err}")
             state.follow_up_draft = draft
             state.updated_at = time.time()
+            spawn(self._persist_state, state)
             spawn(_get_ws_manager().broadcast_state, state.channel_name, {
                 "type": "DEAL_STATE_UPDATE",
                 "data": state.model_dump(),
@@ -178,23 +179,24 @@ class DealStateEngine:
         if not clean_email or "@" not in clean_email:
             clean_email = "anishhyd995@gmail.com"
         try:
-            await email_service.send_email(
+            res = await email_service.send_email(
                 to_email  = clean_email,
                 subject   = draft.get("subject", "Following up from Lively"),
                 html_body = draft.get("body", "").replace("\n", "<br>"),
                 text_body = draft.get("body", ""),
             )
-            draft["sent"] = True
+            draft["sent"] = bool(res.get("delivered", False))
             draft["sent_to"] = clean_email
             draft["sent_at"] = time.time()
             draft["to_email"] = clean_email
             state.follow_up_draft = draft
             state.updated_at = time.time()
+            spawn(self._persist_state, state)
             spawn(_get_ws_manager().broadcast_state, state.channel_name, {
                 "type": "DEAL_STATE_UPDATE",
                 "data": state.model_dump(),
             })
-            logger.info(f"[FollowUp] Dispatched follow-up email to {clean_email}")
+            logger.info(f"[FollowUp] Dispatched follow-up email to {clean_email} (delivered={draft['sent']})")
         except Exception as e:
             logger.warning(f"[FollowUp] Dispatch failed: {e}")
 
@@ -371,18 +373,21 @@ class DealStateEngine:
 
     # ------------------------------------------------------------ contact
     def _set_contact_email(self, state: DealState, email: str) -> None:
-        if email == state.contact_email:
+        if not email or "@" not in email:
+            return
+        clean_email = email.strip().lower()
+        if clean_email == state.contact_email and (state.scheduled_demo or {}).get("invite_status") == "delivered":
             return
         old = state.contact_email
-        state.contact_email = email
-        state.crm_lead.contact_email = email
-        self._log(state, "contact_email", old, email, f"Contact email captured: {email}.")
+        state.contact_email = clean_email
+        state.crm_lead.contact_email = clean_email
+        self._log(state, "contact_email", old, clean_email, f"Contact email captured: {clean_email}.")
         demo = state.scheduled_demo
-        if self._demo_confirmed(state) and demo.get("email") != email:
-            demo["email"] = email
+        if self._demo_confirmed(state):
+            demo["email"] = clean_email
             self._send_invite(state)
         if state.follow_up_draft and not state.follow_up_draft.get("sent"):
-            spawn(self._dispatch_follow_up, state, email)
+            spawn(self._dispatch_follow_up, state, clean_email)
 
     def _resolve_target_email(self, state: DealState, text: str = "") -> Optional[str]:
         spoken = extract_email(text) if text else None
@@ -392,6 +397,8 @@ class DealStateEngine:
             return state.contact_email
         if state.crm_lead.contact_email:
             return state.crm_lead.contact_email
+        if state.scheduled_demo and state.scheduled_demo.get("email"):
+            return state.scheduled_demo.get("email")
         for turn in reversed(state.transcript):
             if turn.role == "buyer":
                 found = extract_email(turn.content)
@@ -532,8 +539,16 @@ class DealStateEngine:
 
         def _done(result: Dict[str, Any]) -> None:
             if state.scheduled_demo is demo:
-                demo["invite_status"] = "delivered" if (result or {}).get("mode") == "smtp" else "preview_only"
+                is_delivered = bool((result or {}).get("delivered")) or (result or {}).get("mode") == "smtp"
+                demo["invite_status"] = "delivered" if is_delivered else "preview_only"
                 demo["invite_error"] = (result or {}).get("error")
+                state.updated_at = time.time()
+                spawn(self._persist_state, state)
+                spawn(_get_ws_manager().broadcast_state, state.channel_name, {
+                    "type": "DEAL_STATE_UPDATE",
+                    "data": state.model_dump(),
+                })
+                logger.info(f"Demo invite email to {email} finished: delivered={demo['invite_status']}")
 
         # SMTP runs in a worker thread so the voice turn never waits on the mail server.
         run_blocking(email_service.send_demo_confirmation, email, dict(demo), on_result=_done)
@@ -584,12 +599,12 @@ class DealStateEngine:
         state = self.get_or_create(channel_name)
         if not self._demo_confirmed(state):
             return None
+        clean_email = email.strip().lower()
         log_start = len(state.change_log)
-        if email != state.contact_email:
-            self._set_contact_email(state, email)  # sends to the new address
-        else:
-            state.scheduled_demo["email"] = email
-            self._send_invite(state)
+        state.contact_email = clean_email
+        state.crm_lead.contact_email = clean_email
+        state.scheduled_demo["email"] = clean_email
+        self._send_invite(state)
         self._finalize(state, log_start)
         return state.scheduled_demo
 

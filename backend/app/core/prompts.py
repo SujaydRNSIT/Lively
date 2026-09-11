@@ -90,6 +90,7 @@ Return ONLY a JSON object with exactly these keys:
   "is_decision_maker": boolean or null,
   "company": string or null,
   "competitor": string or null,
+  "email": string or null,
   "pain_points": [string],
   "objections": [{"type": "pricing" | "competitor" | "latency" | "trust" | "security" | "product", "summary": string}],
   "sentiment": "Positive" | "Neutral" | "Hesitant" | "Skeptical" | "Frustrated" | "Enthusiastic"

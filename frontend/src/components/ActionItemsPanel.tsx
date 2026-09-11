@@ -37,7 +37,9 @@ export const ActionItemsPanel: React.FC<{ dealState: DealState; hero?: boolean }
     setBusy(slot);
     setNotice(null);
     try {
-      const res = await bookDemoSlot(channel, slot, dealState.contact_email);
+      const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('lively_user_email') || '' : '';
+      const targetEmail = (dealState.contact_email || storedUserEmail || '').trim() || null;
+      const res = await bookDemoSlot(channel, slot, targetEmail);
       if (res.status === 'unavailable') setNotice(`${slot} was just taken (${res.data.reason}). Pick another slot.`);
     } catch (err) {
       console.error('Failed to book demo slot:', err);

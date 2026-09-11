@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # Rate limits
     RATE_LIMIT_SESSIONS_PER_HOUR: int = 30
     RATE_LIMIT_CHAT_PER_MINUTE: int = 30
-    EMAILS_PER_CHANNEL_PER_HOUR: int = 3
+    EMAILS_PER_CHANNEL_PER_HOUR: int = 50
 
     # Agora Credentials
     AGORA_APP_ID: str = ""

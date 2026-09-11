@@ -137,17 +137,37 @@ export const OutcomeBanner: React.FC<OutcomeBannerProps> = ({ dealState, onReset
           {/* Follow-up status footer - automatically dispatched */}
           <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t hairline">
             <div className="flex items-center gap-2">
-              <CheckCircle2 size={14} className="text-[#20201e] dark:text-[#f1f0ea]" />
+              <CheckCircle2 size={14} className={followUp.sent ? 'text-[#10b981]' : 'text-neutral-500'} />
               <span className="text-xs font-semibold text-[#20201e] dark:text-[#f1f0ea]">
-                Follow-up email automatically dispatched
+                {followUp.sent ? 'Follow-up email dispatched via SMTP' : 'Follow-up email ready to dispatch'}
               </span>
               <span className="text-xs text-[#696862] dark:text-[#9aa0ad] editorial-mono">
-                → {destinationEmail}
+                → {followUp.sent_to || destinationEmail}
               </span>
             </div>
             <span className="text-[10px] editorial-mono px-2 py-0.5 rounded bg-[#ebe9e1] dark:bg-[#1a1b22] text-[#696862] dark:text-[#9aa0ad]">
-              {sendBusy ? 'Dispatching…' : (followUp.sent ? 'Dispatched' : 'Sent')}
+              {sendBusy ? 'Dispatching…' : (followUp.sent ? 'Dispatched' : 'Ready')}
             </span>
+          </div>
+
+          {/* Send / Resend to another email address */}
+          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <input
+              type="email"
+              value={manualEmail}
+              onChange={(e) => setManualEmail(e.target.value)}
+              placeholder={`Send to another email (default: ${destinationEmail})`}
+              className="px-3 py-1.5 text-xs rounded-lg border hairline bg-white dark:bg-[#18191e] text-[#20201e] dark:text-[#f1f0ea] flex-1 focus:outline-none focus:ring-1 focus:ring-[#20201e]"
+            />
+            <button
+              type="button"
+              onClick={handleManualDispatch}
+              disabled={sendBusy}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#20201e] hover:bg-[#333] text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-[#121623] text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+            >
+              {sendBusy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+              <span>{followUp.sent ? 'Resend Follow-Up' : 'Send Follow-Up'}</span>
+            </button>
           </div>
         </div>
       )}

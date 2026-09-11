@@ -49,25 +49,28 @@ def empty_understanding(source: str) -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------- contact
-
-EMAIL_RE = re.compile(r"\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b")
-# Speech-to-text often renders addresses as words: "my email is jane at acme dot com"
+# Robust email regex covering standard and spaced speech-to-text tokens
+EMAIL_RE = re.compile(r"\b([a-zA-Z0-9._%+-]+)\s*@\s*([a-zA-Z0-9.-]+)\s*\.\s*([a-zA-Z]{2,})\b")
+# Spoken emails, e.g. "my email is anish hyd 995 at gmail dot com" or "send to user at company.com"
 SPOKEN_EMAIL_RE = re.compile(
-    r"(?:e-?mail(?:\s+address)?(?:\s+is|'s)?|reach me at|send (?:it|the invite|that) to)\s*:?\s*"
-    r"([a-z0-9][a-z0-9._-]*)\s+at\s+([a-z0-9][a-z0-9-]*(?:\s+dot\s+[a-z0-9-]+)*)\s+dot\s+(com|io|ai|co|net|org|dev|in|us|uk)\b",
+    r"(?:(?:my\s+)?e-?mail(?:\s+address)?(?:\s+is|:)?|reach(?:\s+me)?\s+at|send\s+(?:it|the\s+invite|that|to)?\s+to\s*:?|it\'?s\s+)?\s*"
+    r"([a-zA-Z0-9][a-zA-Z0-9\s._-]*?)\s+(?:at|@)\s+([a-zA-Z0-9-]+)(?:\s+dot\s+|\.)([a-zA-Z]{2,})\b",
     re.I,
 )
 
 
 def extract_email(text: str) -> Optional[str]:
+    if not text:
+        return None
     m = EMAIL_RE.search(text)
     if m:
-        return m.group(1).strip().rstrip(".")
+        return f"{m.group(1)}@{m.group(2)}.{m.group(3)}".lower()
     m = SPOKEN_EMAIL_RE.search(text)
     if m:
-        domain = re.sub(r"\s+dot\s+", ".", m.group(2), flags=re.I)
-        return f"{m.group(1)}@{domain}.{m.group(3)}".lower()
+        user = re.sub(r"\s+", "", m.group(1)).lower()
+        domain = m.group(2).lower().replace(" ", "")
+        tld = m.group(3).lower()
+        return f"{user}@{domain}.{tld}"
     return None
 
 
@@ -594,8 +597,11 @@ def normalize_llm_understanding(raw: Dict[str, Any], text: str) -> Dict[str, Any
     u["objections"] = objections
     sentiment = _clean_str(raw.get("sentiment"), 20)
     u["sentiment"] = sentiment.capitalize() if sentiment and sentiment.capitalize() in SENTIMENTS else None
-    # Addresses come from the transcript itself, never from the model.
-    u["email"] = extract_email(text)
+    # Addresses come from the transcript itself, with LLM structured fallback if present
+    extracted = extract_email(text)
+    if not extracted and raw.get("email"):
+        extracted = extract_email(str(raw.get("email")))
+    u["email"] = extracted
     return u
 
 
